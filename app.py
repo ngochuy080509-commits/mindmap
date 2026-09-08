@@ -98,33 +98,35 @@ if st.button("🚀 Bắt đầu tạo Mindmap", type="primary"):
 
                 combined = "\n\n".join(summaries)
 
-            # CHẾ ĐỘ 2: VIDEO KHÔNG CÓ PHỤ ĐỀ (DÙNG GEMINI NGHỆ AUDIO DIRECTLY)
+            # CHẾ ĐỘ 2: VIDEO KHÔNG CÓ PHỤ ĐỀ (DÙNG GIẢ LẬP ĐỂ TẢI AUDIO & DÙNG GEMINI AUDIO)
             else:
                 status.write("🎧 Video không có phụ đề. Đang tải âm thanh bài giảng...")
-                audio_file = "temp_audio.mp3"
-                if os.path.exists(audio_file):
-                    os.remove(audio_file)
+                
+                # Dọn dẹp file tạm cũ nếu có
+                for f in os.listdir('.'):
+                    if f.startswith('temp_audio'):
+                        os.remove(f)
                     
-               ydl_opts = {
-    'format': 'm4a/bestaudio/best',
-    'outtmpl': 'temp_audio.%(ext)s',
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['android', 'ios', 'web']
-        }
-    },
-    'headers': {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    }
-}
+                ydl_opts = {
+                    'format': 'm4a/bestaudio/best',
+                    'outtmpl': 'temp_audio.%(ext)s',
+                    'extractor_args': {
+                        'youtube': {
+                            'player_client': ['android', 'ios', 'web']
+                        }
+                    },
+                    'headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    }
+                }
                 try:
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([youtube_url])
                     
-                    # Tìm file audio đã tải về
+                    # Tìm file audio vừa tải
                     downloaded_file = [f for f in os.listdir('.') if f.startswith('temp_audio')][0]
                     
-                    status.write("🎙️ Đang gửi file âm thanh sang AI Gemini để phân tích...")
+                    status.write("🎙️ Đang gửi âm thanh sang AI Gemini để phân tích...")
                     uploaded_file = client.files.upload(file=downloaded_file)
                     
                     prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết kèm theo mốc thời gian."
