@@ -1,11 +1,21 @@
+import os
+import sys
+import subprocess
+
+# TỰ ĐỘNG ÉP STREAMLIT CÀI THƯ VIỆN NẾU THIẾU
+try:
+    from google import genai
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "google-genai", "youtube-transcript-api", "requests"])
+    from google import genai
+
 import streamlit as st
 import re
 import requests
-from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 import streamlit.components.v1 as components
 
-# Cấu hình trang Streamlit
+# CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI YouTube Mindmap Generator", page_icon="🧠", layout="wide")
 
 st.title("🧠 AI Bài Giảng - Tóm Tắt & Vẽ Sơ Đồ Tư Duy")
