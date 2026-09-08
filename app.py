@@ -105,10 +105,18 @@ if st.button("🚀 Bắt đầu tạo Mindmap", type="primary"):
                 if os.path.exists(audio_file):
                     os.remove(audio_file)
                     
-                ydl_opts = {
-                    'format': 'm4a/bestaudio/best',
-                    'outtmpl': 'temp_audio.%(ext)s',
-                }
+               ydl_opts = {
+    'format': 'm4a/bestaudio/best',
+    'outtmpl': 'temp_audio.%(ext)s',
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android', 'ios', 'web']
+        }
+    },
+    'headers': {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    }
+}
                 try:
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([youtube_url])
