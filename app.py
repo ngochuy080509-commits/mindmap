@@ -46,7 +46,8 @@ with st.sidebar:
 
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube", "🎙️ Tải File Âm Thanh"])
 
-MODEL_NAME = "gemini-3.6-flash"
+# TÊN MODEL ĐÃ ĐƯỢC CHUẨN HÓA VỀ BẢN CHÍNH THỨC
+MODEL_NAME = "gemini-2.5-flash"
 
 def generate_content_with_retry(client, contents, max_retries=10, status_container=None):
     for attempt in range(max_retries):
@@ -61,6 +62,7 @@ def generate_content_with_retry(client, contents, max_retries=10, status_contain
                         status_container.write(f"⏳ Đang xếp hàng xử lý, chờ chút nha ({attempt + 1}/{max_retries})...")
                     time.sleep(wait_time)
                     continue
+            st.error(f"❌ Lỗi API từ Gemini: {str(e)}")
             raise e
 
 def render_mindmap_svg(mermaid_code):
@@ -162,7 +164,6 @@ def render_mindmap_svg(mermaid_code):
     """
     components.html(html_code, height=740, scrolling=False)
 
-# PROMPT ĐƯỢC TỐI ƯU CHI TIẾT & CHUYÊN NGHIỆP HƠN
 PROMPT_MAP = """
 Dựa vào bài giảng trên, hãy lập một Sơ đồ tư duy (Mindmap) cực kỳ CHI TIẾT và BAO QUÁT TOÀN BỘ NỘI DUNG.
 
