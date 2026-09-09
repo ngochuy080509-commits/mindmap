@@ -29,16 +29,6 @@ st.markdown("""
         background-color: #f0fdf4; border: 1px solid #bbf7d0;
         padding: 16px; border-radius: 12px; margin-bottom: 20px;
     }
-    
-    .warning-box { 
-        background-color: #fffbebf8; border: 1px solid #fde68a; 
-        padding: 18px; border-radius: 12px; margin-top: 15px; 
-    }
-
-    .alert-compress-box { 
-        background-color: #eff6ff; border: 1px solid #bfdbfe; 
-        padding: 16px; border-radius: 12px; margin-bottom: 20px; 
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,8 +43,6 @@ with st.sidebar:
         api_key = st.text_input("🔑 Nhập Gemini API Key:", type="password")
     else:
         st.success("✅ Đã kết nối API thành công!")
-        
-    chunk_time = st.slider("Độ dài chia đoạn phụ đề (phút):", min_value=10, max_value=30, value=15)
 
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube", "🎙️ Tải File Âm Thanh"])
 
@@ -87,14 +75,14 @@ def render_mindmap_svg(mermaid_code):
       <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
       <style>
-        #wrapper {{ position: relative; width: 100%; height: 650px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }}
+        #wrapper {{ position: relative; width: 100%; height: 720px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }}
         #container {{ width: 100%; height: 100%; }}
         .dl-btn {{ 
-            position: absolute; top: 12px; right: 12px; z-index: 99; 
-            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            position: absolute; top: 14px; right: 14px; z-index: 99; 
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
             color: white; border: none; padding: 10px 18px; 
             border-radius: 10px; font-weight: bold; font-size: 13px; cursor: pointer; 
-            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.35); transition: 0.2s; text-decoration: none; display: inline-block;
+            box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3); transition: 0.2s;
         }}
         .dl-btn:hover {{ transform: scale(1.03); }}
       </style>
@@ -105,7 +93,21 @@ def render_mindmap_svg(mermaid_code):
         <div id="container"><pre class="mermaid">{clean_code}</pre></div>
       </div>
       <script>
-        mermaid.initialize({{ startOnLoad: true, theme: 'forest', flowchart: {{ useMaxWidth: false, htmlLabels: true, curve: 'basis' }} }});
+        mermaid.initialize({{ 
+            startOnLoad: true, 
+            theme: 'base',
+            themeVariables: {{
+                fontFamily: 'Plus Jakarta Sans, sans-serif',
+                primaryColor: '#e0e7ff',
+                primaryTextColor: '#1e1b4b',
+                primaryBorderColor: '#6366f1',
+                lineColor: '#818cf8',
+                secondaryColor: '#f3e8ff',
+                tertiaryColor: '#ecfdf5'
+            }},
+            flowchart: {{ useMaxWidth: false, htmlLabels: true, curve: 'basis' }} 
+        }});
+
         setTimeout(function() {{
           var svg = document.querySelector("#container svg");
           if(svg) {{ 
@@ -120,8 +122,8 @@ def render_mindmap_svg(mermaid_code):
           if (!svg) return;
           
           var bbox = svg.getBBox();
-          var width = Math.max(bbox.width + 100, 1600);
-          var height = Math.max(bbox.height + 100, 1200);
+          var width = Math.max(bbox.width + 120, 1800);
+          var height = Math.max(bbox.height + 120, 1400);
 
           var svgClone = svg.cloneNode(true);
           svgClone.setAttribute("width", width);
@@ -146,7 +148,7 @@ def render_mindmap_svg(mermaid_code):
             var win = window.open();
             if (win) {{
               win.document.write('<div style="text-align:center; font-family:sans-serif; padding:10px;">' +
-                '<h3 style="color:#4f46e5;">📌 Sơ đồ tư duy của bạn</h3>' +
+                '<h3 style="color:#4f46e5;">📌 Sơ đồ tư duy chi tiết của bạn</h3>' +
                 '<p style="color:#666;">Chạm giữ vào hình bên dưới để <b>Lưu ảnh</b> nhé</p>' +
                 '<img src="' + pngUrl + '" style="max-width:100%; height:auto; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1);"/>' +
                 '</div>');
@@ -158,16 +160,26 @@ def render_mindmap_svg(mermaid_code):
     </body>
     </html>
     """
-    components.html(html_code, height=670, scrolling=False)
+    components.html(html_code, height=740, scrolling=False)
 
+# PROMPT ĐƯỢC TỐI ƯU CHI TIẾT & CHUYÊN NGHIỆP HƠN
 PROMPT_MAP = """
-Từ nội dung tóm tắt trên, hãy tạo mã Mermaid flowchart dạng sơ đồ cây từ trái sang phải (`graph LR`).
-YÊU CẦU BẮT BUỘC:
-1. Bắt đầu bằng dòng: `graph LR`
-2. Giữ nguyên tiếng Việt có dấu.
-3. Cú pháp tạo nút an toàn: D["1. Khái Niệm"] --> D1["Nội dung ý 1"]
-4. TUYỆT ĐỐI KHÔNG dùng dấu ngoặc tròn (), ngoặc nhọn {}, ngoặc vuông [] bên trong đoạn chữ tiếng Việt (ngoại trừ ngoặc của ID nút).
-5. Chỉ trả về mã Mermaid trong khối ```mermaid ... ```.
+Dựa vào bài giảng trên, hãy lập một Sơ đồ tư duy (Mindmap) cực kỳ CHI TIẾT và BAO QUÁT TOÀN BỘ NỘI DUNG.
+
+YÊU CẦU BẮT BUỘC VỀ CẤU TRÚC:
+1. Dùng mã Mermaid flowchart dạng từ trái sang phải: `graph LR`
+2. Cấu trúc nhánh sâu 3-4 cấp độ:
+   - Cấp 1: Chủ đề chính bài giảng
+   - Cấp 2: Các Chương / Phần kiến thức lớn
+   - Cấp 3: Ý chính / Lý thuyết / Công thức / Mốc quan trọng
+   - Cấp 4: Ví dụ minh họa / Chi tiết phụ / Lưu ý
+3. Sử dụng icon emoji hợp lý ở đầu mỗi nút để sơ đồ sinh động (VD: 📚, 🔑, 💡, ⚡, 🎯).
+
+QUY TẮC CÚ PHÁP MERMAID AN TOÀN (RẤT QUAN TRỌNG):
+- Khai báo nút dạng: ID["Icon + Nội dung"]
+- TUYỆT ĐỐI KHÔNG dùng các ký tự: ngoặc tròn (), ngoặc nhọn {}, ngoặc vuông [], dấu nháy đôi " bên trong phần văn bản hiển thị.
+- Giữ nguyên tiếng Việt có dấu.
+- Chỉ trả về mã Mermaid trong khối ```mermaid ... ```.
 """
 
 def get_yt_audio_or_sub(url):
@@ -239,13 +251,13 @@ with tab1:
             result_data, result_type = get_yt_audio_or_sub(youtube_url)
             
             if result_type == "sub":
-                status.write("📝 Đã lấy xong dữ liệu, đang tóm tắt nội dung...")
-                prompt = f"Tóm tắt các ý chính bài giảng sau bằng tiếng Việt chuẩn:\n\"{result_data[:30000]}\""
+                status.write("📝 Đã lấy xong dữ liệu, đang phân tích bài giảng...")
+                prompt = f"Phân tích và tóm tắt đầy đủ, chi tiết từng phần bài giảng sau bằng tiếng Việt:\n\"{result_data[:40000]}\""
                 res = generate_content_with_retry(client, prompt, status_container=status)
                 combined = res.text
 
-                status.write("🎨 Đang vẽ sơ đồ tư duy...")
-                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
+                status.write("🎨 Đang thiết kế sơ đồ tư duy phân cấp chi tiết...")
+                prompt_map = f"Từ tóm tắt bài giảng sau:\n{combined}\n\n{PROMPT_MAP}"
                 res_map = generate_content_with_retry(client, prompt_map, status_container=status)
 
                 status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
@@ -265,13 +277,13 @@ with tab1:
                         time.sleep(3)
                         gemini_file = client.files.get(name=gemini_file.name)
                         
-                    status.write("🧠 AI đang tổng hợp các ý chính...")
-                    prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt."
+                    status.write("🧠 AI đang tổng hợp toàn bộ ý chính...")
+                    prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại chi tiết đầy đủ các phần bằng tiếng Việt."
                     res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio], status_container=status)
                     combined = res_audio.text
                     
-                    status.write("🎨 Đang vẽ sơ đồ tư duy...")
-                    prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
+                    status.write("🎨 Đang thiết kế sơ đồ tư duy phân cấp chi tiết...")
+                    prompt_map = f"Từ tóm tắt bài giảng sau:\n{combined}\n\n{PROMPT_MAP}"
                     res_map = generate_content_with_retry(client, prompt_map, status_container=status)
 
                     status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
@@ -326,13 +338,13 @@ with tab2:
                     raise Exception("Không thể xử lý file âm thanh này.")
 
                 status.write("🎧 AI đang lắng nghe và tóm tắt bài giảng...")
-                prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt có mốc thời gian."
+                prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại chi tiết đầy đủ các phần bằng tiếng Việt."
                 
                 res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio], status_container=status)
                 combined = res_audio.text
                 
-                status.write("🎨 Đang vẽ sơ đồ tư duy...")
-                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
+                status.write("🎨 Đang thiết kế sơ đồ tư duy phân cấp chi tiết...")
+                prompt_map = f"Từ tóm tắt bài giảng sau:\n{combined}\n\n{PROMPT_MAP}"
                 res_map = generate_content_with_retry(client, prompt_map, status_container=status)
 
                 status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
