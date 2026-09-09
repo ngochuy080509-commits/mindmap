@@ -7,10 +7,19 @@ from youtube_transcript_api import YouTubeTranscriptApi
 import streamlit.components.v1 as components
 
 # CẤU HÌNH TRANG STREAMLIT
-st.set_page_config(page_title="AI YouTube Mindmap Generator", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
+
+# CSS làm đẹp giao diện Streamlit
+st.markdown("""
+<style>
+    .main { background-color: #f8f9fa; }
+    .stButton>button { width: 100%; border-radius: 8px; height: 3em; font-weight: bold; }
+    div[data-testid="stStatusWidget"] { border-radius: 10px; }
+</style>
+""", unsafe_allow_html=True)
 
 st.title("🧠 AI Bài Giảng - Tóm Tắt & Vẽ Sơ Đồ Tư Duy")
-st.caption("Biến mọi video bài giảng YouTube thành Mindmap trực quan!")
+st.caption("Biến mọi bài giảng YouTube / MP3 thành sơ đồ tư duy đẹp mắt, dễ học!")
 
 # Sidebar nhập API Key và Cấu hình
 with st.sidebar:
@@ -18,7 +27,7 @@ with st.sidebar:
     api_key = st.text_input("Nhập Gemini API Key:", type="password")
     chunk_time = st.slider("Độ dài chia đoạn phụ đề (phút):", min_value=10, max_value=30, value=15)
     st.markdown("---")
-    st.info("💡 **Mẹo:** Nếu video không có phụ đề, hãy tải file MP3 bài giảng về máy rồi tải lên ở mục bên dưới!")
+    st.info("💡 **Mẹo:** Nếu video không có phụ đề, hãy tải file MP3 bài giảng về máy rồi tải lên ở Tab 2!")
 
 # TAB CHỌN CHẾ ĐỘ
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (Không phụ đề)"])
@@ -26,6 +35,88 @@ tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải 
 def extract_video_id(url):
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     return match.group(1) if match else None
+
+def render_beautiful_mindmap(mermaid_code):
+    # Dựng HTML rendering Mermaid cực đẹp + hỗ trợ Pan/Zoom SVG
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+      <style>
+        #container {{
+          width: 100%;
+          height: 650px;
+          background: #ffffff;
+          border-radius: 12px;
+          border: 1px solid #e0e0e0;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+          overflow: hidden;
+          position: relative;
+        }}
+        .mermaid {{
+          width: 100%;
+          height: 100%;
+        }}
+        .hint {{
+          position: absolute;
+          bottom: 10px;
+          right: 15px;
+          background: rgba(0,0,0,0.6);
+          color: white;
+          padding: 4px 10px;
+          border-radius: 20px;
+          font-size: 12px;
+          pointer-events: none;
+        }}
+      </style>
+    </head>
+    <body>
+      <div id="container">
+        <div class="mermaid">
+        {mermaid_code}
+        </div>
+        <div class="hint">🔍 Dùng chuột/ngón tay để kéo & Phóng to / Thu nhỏ</div>
+      </div>
+
+      <script>
+        mermaid.initialize({{ 
+          startOnLoad: true, 
+          theme: 'neutral',
+          flowchart: {{ useMaxWidth: false, htmlLabels: true, curve: 'basis' }}
+        }});
+
+        setTimeout(function() {{
+          var svg = document.querySelector("#container svg");
+          if(svg) {{
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            svgPanZoom(svg, {{
+              zoomEnabled: true,
+              controlIconsEnabled: true,
+              fit: true,
+              center: true
+            }});
+          }}
+        }}, 1000);
+      </script>
+    </body>
+    </html>
+    """
+    components.html(html_code, height=670, scrolling=False)
+
+# PROMPT VẼ SƠ ĐỒ CÂY ĐẸP
+PROMPT_MAP_STYLE = """
+Từ nội dung tóm tắt trên, hãy tạo mã Mermaid flowchart dạng sơ đồ cây từ trái sang phải (dùng `graph LR`).
+Yêu cầu bắt buộc:
+1. Sử dụng cú pháp `graph LR`.
+2. Bắt đầu bằng Chủ đề chính ở gốc.
+3. Phân nhánh rõ ràng thành các Ý lớn -> Ý nhỏ -> Chi tiết.
+4. Rút gọn nhãn các nút cho ngắn gọn, súc tích (dưới 10 từ mỗi nút).
+5. Tuyệt đối KHÔNG dùng các ký tự đặc biệt như dấu ngoặc tròn `()`, ngoặc vuông `[]`, dấu ngoặc nháy trong tên nút ngoại trừ ngoặc của ID nút.
+6. Trả về ĐÚNG mã mermaid trong khối ```mermaid ... ```.
+"""
 
 # --- TAB 1: XỬ LÝ LINK YOUTUBE CÓ PHỤ ĐỀ ---
 with tab1:
@@ -98,8 +189,8 @@ with tab1:
 
                     combined = "\n\n".join(summaries)
 
-                    status.write("🎨 Đang vẽ Sơ đồ tư duy...")
-                    prompt_map = f"Từ tóm tắt sau:\n{combined}\n\nHãy tạo mã Mermaid mindmap chuẩn. Chỉ trả về mã trong ```mermaid ... ```."
+                    status.write("🎨 Đang thiết kế sơ đồ tư duy...")
+                    prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP_STYLE}"
                     res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
                     clean_mermaid = re.sub(r'```mermaid\s*', '', res_map.text)
                     clean_mermaid = re.sub(r'```\s*$', '', clean_mermaid).strip()
@@ -107,16 +198,7 @@ with tab1:
                     status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
                     st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                    html_code = f"""
-                    <div class="mermaid" style="background-color: white; padding: 20px; border-radius: 10px;">
-                    {clean_mermaid}
-                    </div>
-                    <script type="module">
-                      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                      mermaid.initialize({{ startOnLoad: true }});
-                    </script>
-                    """
-                    components.html(html_code, height=600, scrolling=True)
+                    render_beautiful_mindmap(clean_mermaid)
 
                     with st.expander("📄 Xem bản tóm tắt chi tiết"):
                         st.write(combined)
@@ -137,7 +219,6 @@ with tab2:
             client = genai.Client(api_key=api_key)
             status = st.status("🎙️ Đang tải file lên Gemini...", expanded=True)
             
-            # Lưu tạm file upload
             temp_path = f"temp_{uploaded_file.name}"
             with open(temp_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
@@ -150,8 +231,8 @@ with tab2:
                 res_audio = client.models.generate_content(model="gemini-3.6-flash", contents=[gemini_file, prompt_audio])
                 combined = res_audio.text
                 
-                status.write("🎨 Đang vẽ Sơ đồ tư duy...")
-                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\nHãy tạo mã Mermaid mindmap chuẩn. Chỉ trả về mã trong ```mermaid ... ```."
+                status.write("🎨 Đang thiết kế sơ đồ tư duy...")
+                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP_STYLE}"
                 res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
                 clean_mermaid = re.sub(r'```mermaid\s*', '', res_map.text)
                 clean_mermaid = re.sub(r'```\s*$', '', clean_mermaid).strip()
@@ -159,16 +240,7 @@ with tab2:
                 status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
                 st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                html_code = f"""
-                <div class="mermaid" style="background-color: white; padding: 20px; border-radius: 10px;">
-                {clean_mermaid}
-                </div>
-                <script type="module">
-                  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-                  mermaid.initialize({{ startOnLoad: true }});
-                </script>
-                """
-                components.html(html_code, height=600, scrolling=True)
+                render_beautiful_mindmap(clean_mermaid)
 
                 with st.expander("📄 Xem bản tóm tắt chi tiết"):
                     st.write(combined)
