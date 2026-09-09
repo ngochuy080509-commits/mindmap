@@ -29,7 +29,14 @@ st.markdown("""
         margin-bottom: 20px;
     }
     .warning-box { background-color: #fffbebf8; border: 1px solid #fde68a; padding: 18px; border-radius: 12px; margin-top: 15px; }
-    .alert-large-file { background-color: #fef2f2; border: 1px solid #fecaca; padding: 15px; border-radius: 12px; margin-top: 10px; margin-bottom: 15px; }
+    .alert-large-file { 
+        background-color: #eff6ff; 
+        border: 1px solid #bfdbfe; 
+        padding: 15px; 
+        border-radius: 12px; 
+        margin-top: 10px; 
+        margin-bottom: 15px; 
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -237,28 +244,30 @@ with tab1:
 with tab2:
     st.markdown("""
     <div class="guide-box">
-        <h4>⚡ Mẹo tải file siêu nhanh & Không bị nghẽn:</h4>
-        <p>Nếu file âm thanh của bạn nặng (trên 30MB) hoặc tải từ YouTube về, hãy nén dung lượng file cực nhanh trong 5 giây:</p>
+        <h4>🎵 Mẹo lấy file MP3 từ YouTube cực nhanh:</h4>
+        <p>Nếu video YouTube không có phụ đề, bạn chỉ cần tải bản audio MP3 theo 3 bước:</p>
         <ol>
-            <li>Truy cập trang web nén miễn phí: <a href="https://online-audio-converter.com/vi/" target="_blank"><b>online-audio-converter.com</b></a></li>
-            <li>Tải file MP3 lên &rarr; Chọn mức chất lượng <b>Tiết kiệm (Economy 64kbit)</b> &rarr; Bấm <b>Chuyển đổi</b>.</li>
-            <li>File sẽ được thu gọn <b>từ >100MB xuống chỉ còn ~8MB</b> giúp tải lên app chỉ mất vài giây!</li>
+            <li>Copy link bài giảng YouTube.</li>
+            <li>Vào trang web tách nhạc miễn phí: <a href="https://y2mate.is/vi/" target="_blank"><b>y2mate.is</b></a> hoặc <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> &rarr; Dán link và tải file <b>MP3</b> về máy.</li>
+            <li>Upload file MP3 vừa tải vào ô bên dưới để AI tiến hành tạo Mindmap!</li>
         </ol>
     </div>
     """, unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
 
-    # Tự động phát hiện file > 100MB và đưa ra cảnh báo nén file
+    # CHỈ HIỆN KHUNG CẢNH BÁO NẾU FILE > 100MB
     if uploaded_file is not None:
         file_size_mb = uploaded_file.size / (1024 * 1024)
         if file_size_mb > 100:
             st.markdown(f"""
             <div class="alert-large-file">
-                <h4 style="color: #dc2626; margin-top:0;">⚠️ Cảnh báo: File của bạn khá nặng ({file_size_mb:.1f} MB)!</h4>
-                <p style="color: #991b1b; margin-bottom:0;">
-                    File dung lượng lớn hơn 100MB có thể khiến quá trình tải lên bị chậm hoặc dễ ngắt kết nối.<br>
-                    👉 Bạn nên nén nhỏ file xuống ~8MB qua <a href="https://online-audio-converter.com/vi/" target="_blank"><b>online-audio-converter.com</b></a> (chọn mức <b>64 kbit</b>) trước khi bấm phân tích nhé!
+                <h4 style="color: #1e40af; margin-top:0;">⚡ Mẹo tải file siêu nhanh ({file_size_mb:.1f} MB):</h4>
+                <p style="color: #1e3a8a; margin-bottom:0;">
+                    File của bạn khá nặng (>100MB). Để tránh bị nghẽn mạng và giúp AI phân tích siêu tốc, bạn nên nén dung lượng file trong 5 giây:<br>
+                    1. Truy cập trang web nén miễn phí: <a href="https://online-audio-converter.com/vi/" target="_blank"><b>online-audio-converter.com</b></a><br>
+                    2. Tải file MP3 lên &rarr; Chọn mức chất lượng <b>Tiết kiệm (Economy 64kbit)</b> &rarr; Bấm <b>Chuyển đổi</b>.<br>
+                    3. File sẽ thu gọn từ <b>{file_size_mb:.0f}MB xuống còn ~8MB</b> giúp tải lên chỉ mất vài giây!
                 </p>
             </div>
             """, unsafe_allow_html=True)
