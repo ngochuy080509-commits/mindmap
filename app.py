@@ -6,7 +6,6 @@ import time
 from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 import streamlit.components.v1 as components
-from moviepy.editor import AudioFileClip
 
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
@@ -30,14 +29,6 @@ st.markdown("""
         margin-bottom: 20px;
     }
     .warning-box { background-color: #fffbebf8; border: 1px solid #fde68a; padding: 18px; border-radius: 12px; margin-top: 15px; }
-    .alert-large-file { 
-        background-color: #eff6ff; 
-        border: 1px solid #bfdbfe; 
-        padding: 15px; 
-        border-radius: 12px; 
-        margin-top: 10px; 
-        margin-bottom: 15px; 
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -57,16 +48,21 @@ with st.sidebar:
 
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (Không phụ đề)"])
 
-MODEL_NAME = "gemini-2.5-flash"
+# Dùng model chuẩn ổn định cao cho Audio dài
+MODEL_NAME = "gemini-1.5-flash"
 
-def generate_content_with_retry(client, contents, max_retries=5):
+def generate_content_with_retry(client, contents, max_retries=10, status_container=None):
     for attempt in range(max_retries):
         try:
             return client.models.generate_content(model=MODEL_NAME, contents=contents)
         except Exception as e:
-            if ("503" in str(e) or "UNAVAILABLE" in str(e) or "high demand" in str(e).lower()):
+            err_msg = str(e).lower()
+            if "503" in err_msg or "unavailable" in err_msg or "high demand" in err_msg or "overloaded" in err_msg:
                 if attempt < max_retries - 1:
-                    time.sleep(3 * (attempt + 1))
+                    wait_time = (attempt + 1) * 5
+                    if status_container:
+                        status_container.write(f"⏳ Server Google đang bận, đang tự động thử lại lần {attempt + 1}/{max_retries} (chờ {wait_time}s)...")
+                    time.sleep(wait_time)
                     continue
             raise e
 
@@ -211,14 +207,14 @@ with tab1:
                     summaries = []
                     for i, (time_lbl, text) in enumerate(chunks):
                         prompt = f"Tóm tắt ý chính bài giảng đoạn {time_lbl} bằng tiếng Việt chuẩn:\n\"{text}\"\nGiữ mốc thời gian {time_lbl} ở đầu các ý."
-                        res = generate_content_with_retry(client, prompt)
+                        res = generate_content_with_retry(client, prompt, status_container=status)
                         summaries.append(res.text)
 
                     combined = "\n\n".join(summaries)
 
                     status.write("🎨 Đang vẽ sơ đồ tư duy...")
                     prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
-                    res_map = generate_content_with_retry(client, prompt_map)
+                    res_map = generate_content_with_retry(client, prompt_map, status_container=status)
 
                     status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
@@ -243,18 +239,6 @@ with tab1:
 
 # --- TAB 2: AUDIO ---
 with tab2:
-    st.markdown("""
-    <div class="guide-box">
-        <h4>🎵 Mẹo lấy file MP3 từ YouTube cực nhanh:</h4>
-        <p>Nếu video YouTube không có phụ đề, bạn chỉ cần tải bản audio MP3 theo 3 bước:</p>
-        <ol>
-            <li>Copy link bài giảng YouTube.</li>
-            <li>Vào trang web tách nhạc miễn phí: <a href="https://y2mate.is/vi/" target="_blank"><b>y2mate.is</b></a> hoặc <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> &rarr; Dán link và tải file <b>MP3</b> về máy.</li>
-            <li>Upload file MP3 vừa tải vào ô bên dưới để AI tiến hành tạo Mindmap!</li>
-        </ol>
-    </div>
-    """, unsafe_allow_html=True)
-
     uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
 
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
@@ -264,7 +248,7 @@ with tab2:
             st.warning("⚠️ Vui lòng tải file âm thanh lên trước!")
         else:
             client = genai.Client(api_key=api_key)
-            status = st.status("📥 Đang chuẩn bị phân tích file âm thanh...", expanded=True)
+            status = st.status("📥 Đang tải file lên Gemini Server...", expanded=True)
             
             file_ext = os.path.splitext(uploaded_file.name)[1]
             temp_path = f"temp_input{file_ext}"
@@ -273,44 +257,29 @@ with tab2:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                status.write("✂️ Đang tự động chia nhỏ bài giảng thành các đoạn 15 phút...")
-                audio_clip = AudioFileClip(temp_path)
-                duration_sec = audio_clip.duration
-                chunk_sec = 15 * 60  # 15 phút
+                # 1. Tải file thẳng lên Gemini File API
+                gemini_file = client.files.upload(file=temp_path)
+                status.write("✅ Tải file lên Gemini thành công! Đang chờ AI xử lý...")
                 
-                all_summaries = []
-                chunk_index = 0
-                start_time = 0
-                
-                while start_time < duration_sec:
-                    end_time = min(start_time + chunk_sec, duration_sec)
-                    chunk_filename = f"temp_chunk_{chunk_index}.mp3"
+                # Chờ file được xử lý xong trên Server
+                while gemini_file.state.name == "PROCESSING":
+                    time.sleep(3)
+                    gemini_file = client.files.get(name=gemini_file.name)
                     
-                    # Cắt và xuất subclip bằng moviepy
-                    sub_clip = audio_clip.subclip(start_time, end_time)
-                    sub_clip.write_audiofile(chunk_filename, logger=None)
-                    sub_clip.close()
-                    
-                    status.write(f"🧠 AI đang nghe đoạn {chunk_index + 1} ({int(start_time//60)}m - {int(end_time//60)}m)...")
-                    gemini_file = client.files.upload(file=chunk_filename)
-                    
-                    prompt_audio = f"Tóm tắt chi tiết ý chính của bài giảng ở đoạn từ phút {int(start_time//60)} đến {int(end_time//60)} bằng tiếng Việt có mốc thời gian."
-                    res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio])
-                    all_summaries.append(res_audio.text)
-                    
-                    if os.path.exists(chunk_filename):
-                        os.remove(chunk_filename)
-                        
-                    start_time = end_time
-                    chunk_index += 1
-                
-                audio_clip.close()
+                if gemini_file.state.name == "FAILED":
+                    raise Exception("Lỗi xử lý file âm thanh trên Server Google.")
 
-                combined = "\n\n".join(all_summaries)
+                # 2. Gửi Yêu Cầu Tóm Tắt (Có Auto Retry 10 lần nếu nghẽn mạng)
+                status.write("🧠 AI đang lắng nghe và phân tích bài giảng...")
+                prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt có mốc thời gian."
                 
+                res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio], status_container=status)
+                combined = res_audio.text
+                
+                # 3. Tạo Mindmap
                 status.write("🎨 Đang vẽ sơ đồ tư duy...")
                 prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
-                res_map = generate_content_with_retry(client, prompt_map)
+                res_map = generate_content_with_retry(client, prompt_map, status_container=status)
 
                 status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
