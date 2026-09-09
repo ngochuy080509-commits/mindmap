@@ -6,7 +6,7 @@ import time
 from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 import streamlit.components.v1 as components
-from pydub import AudioSegment
+from moviepy.editor import AudioFileClip
 
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
@@ -257,21 +257,6 @@ with tab2:
 
     uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
 
-    if uploaded_file is not None:
-        file_size_mb = uploaded_file.size / (1024 * 1024)
-        if file_size_mb > 100:
-            st.markdown(f"""
-            <div class="alert-large-file">
-                <h4 style="color: #1e40af; margin-top:0;">⚡ Mẹo tải file siêu nhanh ({file_size_mb:.1f} MB):</h4>
-                <p style="color: #1e3a8a; margin-bottom:0;">
-                    File của bạn khá nặng (>100MB). Để tránh bị nghẽn mạng và giúp AI phân tích siêu tốc, bạn nên nén dung lượng file trong 5 giây:<br>
-                    1. Truy cập trang web nén miễn phí: <a href="https://online-audio-converter.com/vi/" target="_blank"><b>online-audio-converter.com</b></a><br>
-                    2. Tải file MP3 lên &rarr; Chọn mức chất lượng <b>Tiết kiệm (Economy 64kbit)</b> &rarr; Bấm <b>Chuyển đổi</b>.<br>
-                    3. File sẽ thu gọn từ <b>{file_size_mb:.0f}MB xuống còn ~8MB</b> giúp tải lên chỉ mất vài giây!
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
         if not api_key:
             st.error("❌ Vui lòng nhập Gemini API Key!")
@@ -288,28 +273,38 @@ with tab2:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                # CẮT FILE THÀNH CÁC PHẦN NHỎ 15 PHÚT NẾU FILE NẶNG/DÀI
                 status.write("✂️ Đang tự động chia nhỏ bài giảng thành các đoạn 15 phút...")
-                audio = AudioSegment.from_file(temp_path)
-                chunk_length_ms = 15 * 60 * 1000  # 15 phút
-                chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
+                audio_clip = AudioFileClip(temp_path)
+                duration_sec = audio_clip.duration
+                chunk_sec = 15 * 60  # 15 phút
                 
                 all_summaries = []
+                chunk_index = 0
+                start_time = 0
                 
-                for idx, chunk in enumerate(chunks):
-                    chunk_filename = f"temp_chunk_{idx}.mp3"
-                    chunk.export(chunk_filename, format="mp3")
+                while start_time < duration_sec:
+                    end_time = min(start_time + chunk_sec, duration_sec)
+                    chunk_filename = f"temp_chunk_{chunk_index}.mp3"
                     
-                    status.write(f"🧠 AI đang nghe đoạn {idx + 1}/{len(chunks)}...")
+                    # Cắt và xuất subclip bằng moviepy
+                    sub_clip = audio_clip.subclip(start_time, end_time)
+                    sub_clip.write_audiofile(chunk_filename, logger=None)
+                    sub_clip.close()
+                    
+                    status.write(f"🧠 AI đang nghe đoạn {chunk_index + 1} ({int(start_time//60)}m - {int(end_time//60)}m)...")
                     gemini_file = client.files.upload(file=chunk_filename)
                     
-                    prompt_audio = f"Tóm tắt chi tiết ý chính của bài giảng ở đoạn {idx + 1} này bằng tiếng Việt có mốc thời gian."
+                    prompt_audio = f"Tóm tắt chi tiết ý chính của bài giảng ở đoạn từ phút {int(start_time//60)} đến {int(end_time//60)} bằng tiếng Việt có mốc thời gian."
                     res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio])
                     all_summaries.append(res_audio.text)
                     
-                    # Dọn dẹp file tạm đoạn nhỏ
                     if os.path.exists(chunk_filename):
                         os.remove(chunk_filename)
+                        
+                    start_time = end_time
+                    chunk_index += 1
+                
+                audio_clip.close()
 
                 combined = "\n\n".join(all_summaries)
                 
