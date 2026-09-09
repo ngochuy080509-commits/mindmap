@@ -43,7 +43,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🧠 AI Bài Giảng - Mindmap Trực Quan & Đẹp Mắt")
-st.caption("Biến mọi video bài giảng YouTube hoặc Audio MP3/M4A thành Sơ đồ tư duy sinh động!")
+st.caption("Biến mọi video bài giảng YouTube hoặc Audio MP3 thành Sơ đồ tư duy sinh động!")
 
 api_key = st.secrets.get("GEMINI_API_KEY", None)
 
@@ -56,9 +56,8 @@ with st.sidebar:
         
     chunk_time = st.slider("Độ dài chia đoạn phụ đề (phút):", min_value=10, max_value=30, value=15)
 
-tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (M4A / MP3)"])
+tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (MP3 / WAV)"])
 
-# ĐÃ ĐỔI TÊN MODEL SANG GEMINI 3.6 THEO YÊU CẦU
 MODEL_NAME = "gemini-3.6-flash"
 
 def generate_content_with_retry(client, contents, max_retries=10, status_container=None):
@@ -98,47 +97,48 @@ def render_mindmap_svg(mermaid_code):
             position: absolute; top: 12px; right: 12px; z-index: 99; 
             background: #4f46e5; color: white; border: none; padding: 10px 16px; 
             border-radius: 8px; font-weight: bold; font-size: 13px; cursor: pointer; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15); transition: 0.2s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15); transition: 0.2s; text-decoration: none; display: inline-block;
         }}
         .dl-btn:hover {{ background: #4338ca; transform: scale(1.03); }}
       </style>
     </head>
     <body>
       <div id="wrapper">
-        <button class="dl-btn" onclick="downloadPNG()">📸 Tải Ảnh Mindmap (PNG)</button>
+        <button class="dl-btn" onclick="downloadImage()">📸 Tải Ảnh Mindmap</button>
         <div id="container"><pre class="mermaid">{clean_code}</pre></div>
       </div>
       <script>
         mermaid.initialize({{ startOnLoad: true, theme: 'forest', flowchart: {{ useMaxWidth: false, htmlLabels: true, curve: 'basis' }} }});
         setTimeout(function() {{
           var svg = document.querySelector("#container svg");
-          if(svg) {{ svg.style.width = '100%'; svg.style.height = '100%'; svgPanZoom(svg, {{ zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true }}); }}
+          if(svg) {{ 
+            svg.style.width = '100%'; 
+            svg.style.height = '100%'; 
+            svgPanZoom(svg, {{ zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true }}); 
+          }}
         }}, 800);
-        function downloadPNG() {{
+
+        function downloadImage() {{
           var svg = document.querySelector("#container svg");
           if (!svg) return;
-          var svgClone = svg.cloneNode(true);
-          svgClone.setAttribute("width", "2000");
-          svgClone.setAttribute("height", "1500");
+          
           var serializer = new XMLSerializer();
-          var svgBlob = new Blob([serializer.serializeToString(svgClone)], {{ type: "image/svg+xml;charset=utf-8" }});
-          var blobURL = (window.URL || window.webkitURL).createObjectURL(svgBlob);
-          var image = new Image();
-          image.onload = function() {{
-            var canvas = document.createElement("canvas");
-            canvas.width = 2000; canvas.height = 1500;
-            var context = canvas.getContext("2d");
-            context.fillStyle = "#FFFFFF";
-            context.fillRect(0, 0, canvas.width, canvas.height);
-            context.drawImage(image, 0, 0);
+          var svgString = serializer.serializeToString(svg);
+          var svgBlob = new Blob([svgString], {{type: "image/svg+xml;charset=utf-8"}});
+          var url = URL.createObjectURL(svgBlob);
+          
+          // Mở tab mới chứa ảnh để điện thoại giữ/lưu trực tiếp vào Album dễ dàng
+          var win = window.open();
+          if (win) {{
+            win.document.write('<p style="font-family:sans-serif; text-align:center;"><b>Chạm và giữ vào ảnh bên dưới để Lưu về máy:</b></p><img src="' + url + '" style="max-width:100%;"/>');
+          }} else {{
             var a = document.createElement("a");
-            a.download = "mindmap-bai-giang.png";
-            a.href = canvas.toDataURL("image/png");
+            a.href = url;
+            a.download = "mindmap-bai-giang.svg";
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-          }};
-          image.src = blobURL;
+          }}
         }}
       </script>
     </body>
@@ -243,12 +243,11 @@ with tab1:
                     st.markdown("""
                     <div class="warning-box">
                         <h4 style="color: #b45309; margin-top:0;">💡 Video này không hỗ trợ phụ đề trực tiếp!</h4>
-                        <p style="color: #78350f;">Hãy tải file âm thanh nhẹ dạng M4A để AI xử lý:</p>
+                        <p style="color: #78350f;">Bạn tách file audio chỉ với 3 bước cực dễ:</p>
                         <ol style="color: #78350f;">
                             <li>Copy link video YouTube này.</li>
-                            <li>Vào trang: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> &rarr; Dán link vào.</li>
-                            <li>Chọn định dạng tải xuống là <b>M4A</b> để file siêu nhẹ (dưới 20MB) rồi bấm Download.</li>
-                            <li>Chuyển sang <b>Tab "Tải File Âm Thanh"</b> ở trên để upload file vừa tải về!</li>
+                            <li>Vào trang: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> &rarr; Dán link và bấm tải file <b>MP3</b>.</li>
+                            <li>Chuyển qua <b>Tab "Tải File Âm Thanh"</b> ở trên để thả file MP3 lên!</li>
                         </ol>
                     </div>
                     """, unsafe_allow_html=True)
@@ -257,18 +256,17 @@ with tab1:
 with tab2:
     st.markdown("""
     <div class="guide-box">
-        <h4 style="color: #15803d; margin-top:0;">⚡ Hướng dẫn tải file M4A siêu nhẹ (Dưới 20MB):</h4>
-        <p style="color: #166534; margin-bottom: 5px;">Để tránh bị treo khi upload file nặng, hãy chọn đúng định dạng M4A theo các bước:</p>
+        <h4 style="color: #15803d; margin-top:0;">🎵 Mẹo tách nhạc MP3 từ YouTube cực nhanh:</h4>
+        <p style="color: #166534; margin-bottom: 5px;">Nếu bài giảng YouTube không có phụ đề, bạn tách file audio cực dễ chỉ với 3 bước:</p>
         <ol style="color: #166534; margin-bottom: 0;">
             <li>Copy link bài giảng trên YouTube.</li>
-            <li>Vào trang web: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> &rarr; Dán link YouTube vào ô tìm kiếm.</li>
-            <li>Tại menu chọn định dạng (đang mặc định là MP3), bấm đổi sang <b>M4A</b> &rarr; Bấm <b>Convert / Download</b>.</li>
-            <li>Thả file <b>.m4a</b> vừa tải vào ô bên dưới để AI tạo Mindmap trong vài giây!</li>
+            <li>Vào trang web tách nhạc: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> hoặc <a href="https://y2mate.is/vi/" target="_blank"><b>y2mate.is</b></a> &rarr; Dán link và bấm tải file <b>MP3</b>.</li>
+            <li>Thả file MP3 vừa tải vào ô bên dưới để AI tiến hành tạo Mindmap ngay!</li>
         </ol>
     </div>
     """, unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây (M4A, MP3, WAV):", type=["m4a", "mp3", "wav", "mp4"])
+    uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây (MP3, M4A, WAV):", type=["mp3", "m4a", "wav", "mp4"])
 
     if uploaded_file is not None:
         file_size_mb = uploaded_file.size / (1024 * 1024)
@@ -277,9 +275,10 @@ with tab2:
             <div class="alert-compress-box">
                 <h4 style="color: #1e40af; margin-top:0;">⚠️ File của bạn khá nặng ({file_size_mb:.1f}MB)!</h4>
                 <p style="color: #1e3a8a; margin-bottom: 0;">
-                    File MP3 trên 100MB sẽ tải rất lâu. Bạn nên nén lại thành file M4A chỉ còn 15MB bằng cách:<br>
+                    Tải file trên 100MB qua mạng di động/Streamlit sẽ mất nhiều thời gian. Để AI chạy trong chớp mắt, bạn nên nén nhẹ file lại:<br>
                     • Truy cập trang: <a href="https://online-audio-converter.com/vi/" target="_blank"><b>online-audio-converter.com</b></a><br>
-                    • Tải file lên &rarr; Chọn định dạng <b>m4a</b> hoặc chọn mức <b>Economy 64 kbit/s</b> &rarr; Bấm Chuyển đổi.
+                    • Upload file &rarr; Chọn định dạng <b>MP3</b> chất lượng <b>Economy 64 kbit/s</b> &rarr; Bấm Chuyển đổi.<br>
+                    • File sẽ giảm còn 10MB–20MB mà chất lượng giọng nói vẫn giữ nguyên 100%.
                 </p>
             </div>
             """, unsafe_allow_html=True)
