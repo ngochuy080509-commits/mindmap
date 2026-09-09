@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
 
-# CSS Giao diện
+# CSS Giao diện hiện đại
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
@@ -59,7 +59,6 @@ def extract_video_id(url):
     return match.group(1) if match else None
 
 def render_mindmap_svg(mermaid_code):
-    # Render Mermaid chuẩn không bao giờ trắng màn hình + Có nút tải ảnh
     clean_code = re.sub(r'```mermaid\s*', '', mermaid_code)
     clean_code = re.sub(r'```\s*$', '', clean_code).strip()
     
@@ -152,7 +151,7 @@ def render_mindmap_svg(mermaid_code):
     """
     components.html(html_code, height=670, scrolling=False)
 
-# PROMPT VẼ SƠ ĐỒ CÂY AN TOÀN CHỐNG LỖI 100%
+# PROMPT VẼ SƠ ĐỒ AN TOÀN KHÔNG BỊ LỖI
 PROMPT_MAP = """
 Từ nội dung tóm tắt trên, hãy tạo mã Mermaid flowchart dạng sơ đồ cây từ trái sang phải (`graph LR`).
 
@@ -254,12 +253,12 @@ with tab1:
 with tab2:
     st.markdown("""
     <div class="guide-box">
-        <h4>💡 Hướng dẫn tải MP3 từ YouTube (Chỉ mất 10 giây):</h4>
+        <h4>💡 Hướng dẫn tải MP3 cực nhanh (Chỉ mất 5 - 10 giây):</h4>
         <ol>
             <li>Mở YouTube và <b>Copy link video</b> bài giảng bạn muốn tóm tắt.</li>
-            <li>Truy cập trang web: <a href="https://y2meta.nu" target="_blank"><b>y2meta.nu</b></a> hoặc <a href="https://y2mate.is" target="_blank"><b>y2mate.is</b></a>.</li>
-            <li>Dán link YouTube vào ô tìm kiếm &rarr; Chọn tab <b>MP3</b> &rarr; Bấm <b>Download</b> về máy.</li>
-            <li>Kéo thả file MP3 vừa tải vào khung bên dưới để tạo Mindmap!</li>
+            <li>Truy cập trang web tải siêu tốc: <a href="https://cobalt.tools" target="_blank"><b>cobalt.tools</b></a> hoặc <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a>.</li>
+            <li>Dán link YouTube vào ô tìm kiếm &rarr; Chọn định dạng <b>MP3</b> &rarr; Bấm <b>Tải về / Download</b>.</li>
+            <li>Kéo thả file MP3 vừa tải vào khung bên dưới để AI tự động tạo Mindmap!</li>
         </ol>
     </div>
     """, unsafe_allow_html=True)
@@ -275,7 +274,10 @@ with tab2:
             client = genai.Client(api_key=api_key)
             status = st.status("🎙️ Đang tải file lên Gemini...", expanded=True)
             
-            temp_path = f"temp_{uploaded_file.name}"
+            # Đổi tên file tạm cố định để tránh lỗi UTF-8/ASCII khi tên file có tiếng Việt
+            file_ext = os.path.splitext(uploaded_file.name)[1]
+            temp_path = f"temp_input_audio{file_ext}"
+            
             with open(temp_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
                 
