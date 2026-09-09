@@ -7,37 +7,24 @@ from youtube_transcript_api import YouTubeTranscriptApi
 import streamlit.components.v1 as components
 
 # CẤU HÌNH TRANG STREAMLIT
-st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🎨", layout="wide")
 
-# CSS làm đẹp giao diện Streamlit
-st.markdown("""
-<style>
-    .main { background-color: #f8f9fa; }
-    .stButton>button { width: 100%; border-radius: 8px; height: 3em; font-weight: bold; }
-    div[data-testid="stStatusWidget"] { border-radius: 10px; }
-</style>
-""", unsafe_allow_html=True)
+st.title("🎨 AI Bài Giảng - Sơ Đồ Tư Duy Dễ Học")
+st.caption("Biến mọi bài giảng YouTube / MP3 thành sơ đồ tư duy trực quan!")
 
-st.title("🧠 AI Bài Giảng - Tóm Tắt & Vẽ Sơ Đồ Tư Duy")
-st.caption("Biến mọi bài giảng YouTube / MP3 thành sơ đồ tư duy đẹp mắt, dễ học!")
-
-# Sidebar nhập API Key và Cấu hình
+# Sidebar
 with st.sidebar:
     st.header("⚙️ Cấu hình")
     api_key = st.text_input("Nhập Gemini API Key:", type="password")
     chunk_time = st.slider("Độ dài chia đoạn phụ đề (phút):", min_value=10, max_value=30, value=15)
-    st.markdown("---")
-    st.info("💡 **Mẹo:** Nếu video không có phụ đề, hãy tải file MP3 bài giảng về máy rồi tải lên ở Tab 2!")
 
-# TAB CHỌN CHẾ ĐỘ
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (Không phụ đề)"])
 
 def extract_video_id(url):
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     return match.group(1) if match else None
 
-def render_beautiful_mindmap(mermaid_code):
-    # Dựng HTML rendering Mermaid cực đẹp + hỗ trợ Pan/Zoom SVG
+def render_mindmap(mermaid_code):
     html_code = f"""
     <!DOCTYPE html>
     <html>
@@ -51,7 +38,6 @@ def render_beautiful_mindmap(mermaid_code):
           background: #ffffff;
           border-radius: 12px;
           border: 1px solid #e0e0e0;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.05);
           overflow: hidden;
           position: relative;
         }}
@@ -63,10 +49,10 @@ def render_beautiful_mindmap(mermaid_code):
           position: absolute;
           bottom: 10px;
           right: 15px;
-          background: rgba(0,0,0,0.6);
+          background: #4a5568;
           color: white;
-          padding: 4px 10px;
-          border-radius: 20px;
+          padding: 4px 12px;
+          border-radius: 15px;
           font-size: 12px;
           pointer-events: none;
         }}
@@ -77,13 +63,13 @@ def render_beautiful_mindmap(mermaid_code):
         <div class="mermaid">
         {mermaid_code}
         </div>
-        <div class="hint">🔍 Dùng chuột/ngón tay để kéo & Phóng to / Thu nhỏ</div>
+        <div class="hint">🔍 Dùng chuột/ngón tay để phóng to & kéo</div>
       </div>
 
       <script>
         mermaid.initialize({{ 
           startOnLoad: true, 
-          theme: 'neutral',
+          theme: 'forest',
           flowchart: {{ useMaxWidth: false, htmlLabels: true, curve: 'basis' }}
         }});
 
@@ -99,26 +85,26 @@ def render_beautiful_mindmap(mermaid_code):
               center: true
             }});
           }}
-        }}, 1000);
+        }}, 800);
       </script>
     </body>
     </html>
     """
     components.html(html_code, height=670, scrolling=False)
 
-# PROMPT VẼ SƠ ĐỒ CÂY ĐẸP
-PROMPT_MAP_STYLE = """
-Từ nội dung tóm tắt trên, hãy tạo mã Mermaid flowchart dạng sơ đồ cây từ trái sang phải (dùng `graph LR`).
-Yêu cầu bắt buộc:
-1. Sử dụng cú pháp `graph LR`.
-2. Bắt đầu bằng Chủ đề chính ở gốc.
-3. Phân nhánh rõ ràng thành các Ý lớn -> Ý nhỏ -> Chi tiết.
-4. Rút gọn nhãn các nút cho ngắn gọn, súc tích (dưới 10 từ mỗi nút).
-5. Tuyệt đối KHÔNG dùng các ký tự đặc biệt như dấu ngoặc tròn `()`, ngoặc vuông `[]`, dấu ngoặc nháy trong tên nút ngoại trừ ngoặc của ID nút.
-6. Trả về ĐÚNG mã mermaid trong khối ```mermaid ... ```.
+# PROMPT VẼ SƠ ĐỒ CÂY AN TOÀN CHỐNG LỖI
+PROMPT_MAP = """
+Từ nội dung tóm tắt trên, hãy tạo mã Mermaid flowchart đơn giản dạng sơ đồ cây từ trái sang phải (`graph LR`).
+
+Quy tắc bắt buộc để KHÔNG BỊ LỖI:
+1. Bắt đầu bằng dòng: `graph LR`
+2. Tạo các nút nối với nhau dạng: `A[Gốc] --> B[Nhánh 1]`
+3. KHÔNG sử dụng các ký tự đặc biệt như: (), [], {}, "", '', :, ;, &, <, > bên trong nội dung chữ.
+4. Chỉ viết ngắn gọn các từ, không rườm rà.
+5. Chỉ trả về duy nhất đoạn mã mermaid nằm trong khối ```mermaid ... ```.
 """
 
-# --- TAB 1: XỬ LÝ LINK YOUTUBE CÓ PHỤ ĐỀ ---
+# --- TAB 1: YOUTUBE ---
 with tab1:
     youtube_url = st.text_input("👇 Dán link YouTube bài giảng vào đây:", placeholder="https://www.youtube.com/watch?v=...")
 
@@ -190,7 +176,7 @@ with tab1:
                     combined = "\n\n".join(summaries)
 
                     status.write("🎨 Đang thiết kế sơ đồ tư duy...")
-                    prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP_STYLE}"
+                    prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
                     res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
                     clean_mermaid = re.sub(r'```mermaid\s*', '', res_map.text)
                     clean_mermaid = re.sub(r'```\s*$', '', clean_mermaid).strip()
@@ -198,7 +184,7 @@ with tab1:
                     status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
                     st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                    render_beautiful_mindmap(clean_mermaid)
+                    render_mindmap(clean_mermaid)
 
                     with st.expander("📄 Xem bản tóm tắt chi tiết"):
                         st.write(combined)
@@ -206,7 +192,7 @@ with tab1:
                     status.update(label="❌ Không tìm thấy phụ đề!", state="error")
                     st.error("Video này không có phụ đề sẵn. Vui lòng chuyển sang tab 'Tải File Âm Thanh' để xử lý nhé!")
 
-# --- TAB 2: UPLOAD FILE ÂM THANH TRỰC TIẾP ---
+# --- TAB 2: AUDIO ---
 with tab2:
     uploaded_file = st.file_uploader("📂 Tải file MP3 / M4A / WAV bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
 
@@ -224,15 +210,15 @@ with tab2:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                status.write("🧠 Gemini đang lắng nghe và tóm tắt bài giảng...")
+                status.write("🧠 Gemini đang nghe bài giảng...")
                 gemini_file = client.files.upload(file=temp_path)
                 
                 prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết kèm theo mốc thời gian."
                 res_audio = client.models.generate_content(model="gemini-3.6-flash", contents=[gemini_file, prompt_audio])
                 combined = res_audio.text
                 
-                status.write("🎨 Đang thiết kế sơ đồ tư duy...")
-                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP_STYLE}"
+                status.write("🎨 Đang vẽ sơ đồ tư duy...")
+                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
                 res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
                 clean_mermaid = re.sub(r'```mermaid\s*', '', res_map.text)
                 clean_mermaid = re.sub(r'```\s*$', '', clean_mermaid).strip()
@@ -240,7 +226,7 @@ with tab2:
                 status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
                 st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                render_beautiful_mindmap(clean_mermaid)
+                render_mindmap(clean_mermaid)
 
                 with st.expander("📄 Xem bản tóm tắt chi tiết"):
                     st.write(combined)
