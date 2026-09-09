@@ -35,6 +35,13 @@ st.markdown("""
         border-radius: 12px;
         margin-bottom: 20px;
     }
+    .warning-box {
+        background-color: #fffbebf8;
+        border: 1px solid #fde68a;
+        padding: 18px;
+        border-radius: 12px;
+        margin-top: 15px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -271,8 +278,17 @@ with tab1:
                     with st.expander("📄 Xem bản tóm tắt chi tiết"):
                         st.write(combined)
                 else:
-                    status.update(label="❌ Không tìm thấy phụ đề!", state="error")
-                    st.error("Video này không có phụ đề sẵn. Vui lòng chuyển sang tab 'Tải File Âm Thanh' để xử lý nhé!")
+                    status.update(label="⚠️ Không tìm thấy phụ đề cho Video này!", state="error")
+                    st.markdown("""
+                    <div class="warning-box">
+                        <h4>💡 Video này không hỗ trợ phụ đề trực tiếp!</h4>
+                        <p>Đừng lo, bạn vẫn có thể tạo Mindmap bình thường bằng cách thực hiện 2 bước đơn giản sau:</p>
+                        <ol>
+                            <li>Truy cập <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a> để chuyển link YouTube này thành file MP3 (chỉ mất khoảng 5 giây).</li>
+                            <li>Chuyển sang <b>Tab "🎙️ Tải File Âm Thanh"</b> ở bên cạnh và kéo thả file MP3 vừa tải vào để AI lắng nghe & vẽ sơ đồ tư duy nhé!</li>
+                        </ol>
+                    </div>
+                    """, unsafe_allow_html=True)
 
 # --- TAB 2: AUDIO ---
 with tab2:
