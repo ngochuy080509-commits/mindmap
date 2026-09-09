@@ -93,14 +93,14 @@ with tab1:
                     summaries = []
                     for i, (time_lbl, text) in enumerate(chunks):
                         prompt = f"Tóm tắt ý chính bài giảng đoạn {time_lbl}:\n\"{text}\"\nGiữ mốc thời gian {time_lbl} ở đầu các ý."
-                        res = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+                        res = client.models.generate_content(model="gemini-3.6-flash", contents=prompt)
                         summaries.append(res.text)
 
                     combined = "\n\n".join(summaries)
 
                     status.write("🎨 Đang vẽ Sơ đồ tư duy...")
                     prompt_map = f"Từ tóm tắt sau:\n{combined}\n\nHãy tạo mã Mermaid mindmap chuẩn. Chỉ trả về mã trong ```mermaid ... ```."
-                    res_map = client.models.generate_content(model="gemini-2.5-flash", contents=prompt_map)
+                    res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
                     clean_mermaid = re.sub(r'```mermaid\s*', '', res_map.text)
                     clean_mermaid = re.sub(r'```\s*$', '', clean_mermaid).strip()
 
@@ -147,12 +147,12 @@ with tab2:
                 gemini_file = client.files.upload(file=temp_path)
                 
                 prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết kèm theo mốc thời gian."
-                res_audio = client.models.generate_content(model="gemini-2.5-flash", contents=[gemini_file, prompt_audio])
+                res_audio = client.models.generate_content(model="gemini-3.6-flash", contents=[gemini_file, prompt_audio])
                 combined = res_audio.text
                 
                 status.write("🎨 Đang vẽ Sơ đồ tư duy...")
                 prompt_map = f"Từ tóm tắt sau:\n{combined}\n\nHãy tạo mã Mermaid mindmap chuẩn. Chỉ trả về mã trong ```mermaid ... ```."
-                res_map = client.models.generate_content(model="gemini-2.5-flash", contents=prompt_map)
+                res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
                 clean_mermaid = re.sub(r'```mermaid\s*', '', res_map.text)
                 clean_mermaid = re.sub(r'```\s*$', '', clean_mermaid).strip()
 
