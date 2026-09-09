@@ -47,7 +47,8 @@ with st.sidebar:
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube", "🎙️ Tải File Âm Thanh"])
 
 # TÊN MODEL ĐÃ ĐƯỢC CHUẨN HÓA VỀ BẢN CHÍNH THỨC
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.6-flash"
+
 
 def generate_content_with_retry(client, contents, max_retries=10, status_container=None):
     for attempt in range(max_retries):
