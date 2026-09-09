@@ -6,7 +6,6 @@ import time
 from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 import streamlit.components.v1 as components
-from pydub import AudioSegment
 
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
@@ -15,35 +14,14 @@ st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layou
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-    }
+    html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
     .main { background: #f8fafc; }
     .stButton>button { 
-        width: 100%; 
-        border-radius: 12px; 
-        height: 3.2em; 
-        font-weight: 700;
+        width: 100%; border-radius: 12px; height: 3.2em; font-weight: 700;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-        color: white;
-        border: none;
-        box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
+        color: white; border: none; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
     }
-    .guide-box {
-        background-color: #f0fdf4;
-        border: 1px solid #bbf7d0;
-        padding: 15px;
-        border-radius: 12px;
-        margin-bottom: 20px;
-    }
-    .warning-box {
-        background-color: #fffbebf8;
-        border: 1px solid #fde68a;
-        padding: 18px;
-        border-radius: 12px;
-        margin-top: 15px;
-    }
+    .warning-box { background-color: #fffbebf8; border: 1px solid #fde68a; padding: 18px; border-radius: 12px; margin-top: 15px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -64,16 +42,6 @@ with st.sidebar:
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (Không phụ đề)"])
 
 MODEL_NAME = "gemini-3.6-flash"
-
-def compress_audio(input_path, output_path, bitrate="64k"):
-    """Tự động nén file âm thanh về dung lượng siêu nhẹ (bitrate 64k)"""
-    try:
-        audio = AudioSegment.from_file(input_path)
-        audio.export(output_path, format="mp3", bitrate=bitrate)
-        return True
-    except Exception as e:
-        print(f"Lỗi khi nén: {e}")
-        return False
 
 def generate_content_with_retry(client, contents, max_retries=3):
     for attempt in range(max_retries):
@@ -102,100 +70,43 @@ def render_mindmap_svg(mermaid_code):
       <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
       <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
       <style>
-        #wrapper {{
-          position: relative;
-          width: 100%;
-          height: 650px;
-          background: #ffffff;
-          border-radius: 16px;
-          border: 1px solid #e2e8f0;
-          overflow: hidden;
-        }}
-        #container {{
-          width: 100%;
-          height: 100%;
-        }}
-        .dl-btn {{
-          position: absolute;
-          top: 12px;
-          right: 12px;
-          z-index: 99;
-          background: #4f46e5;
-          color: white;
-          border: none;
-          padding: 8px 14px;
-          border-radius: 8px;
-          font-weight: bold;
-          font-size: 12px;
-          cursor: pointer;
-          box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-        }}
-        .dl-btn:hover {{
-          background: #4338ca;
-        }}
+        #wrapper {{ position: relative; width: 100%; height: 650px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }}
+        #container {{ width: 100%; height: 100%; }}
+        .dl-btn {{ position: absolute; top: 12px; right: 12px; z-index: 99; background: #4f46e5; color: white; border: none; padding: 8px 14px; border-radius: 8px; font-weight: bold; font-size: 12px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }}
+        .dl-btn:hover {{ background: #4338ca; }}
       </style>
     </head>
     <body>
       <div id="wrapper">
         <button class="dl-btn" onclick="downloadPNG()">📸 Tải Ảnh PNG</button>
-        <div id="container">
-          <pre class="mermaid">
-          {clean_code}
-          </pre>
-        </div>
+        <div id="container"><pre class="mermaid">{clean_code}</pre></div>
       </div>
-
       <script>
-        mermaid.initialize({{ 
-          startOnLoad: true, 
-          theme: 'forest',
-          flowchart: {{ useMaxWidth: false, htmlLabels: true, curve: 'basis' }}
-        }});
-
+        mermaid.initialize({{ startOnLoad: true, theme: 'forest', flowchart: {{ useMaxWidth: false, htmlLabels: true, curve: 'basis' }} }});
         setTimeout(function() {{
           var svg = document.querySelector("#container svg");
-          if(svg) {{
-            svg.style.width = '100%';
-            svg.style.height = '100%';
-            svgPanZoom(svg, {{
-              zoomEnabled: true,
-              controlIconsEnabled: true,
-              fit: true,
-              center: true
-            }});
-          }}
+          if(svg) {{ svg.style.width = '100%'; svg.style.height = '100%'; svgPanZoom(svg, {{ zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true }}); }}
         }}, 800);
-
         function downloadPNG() {{
           var svg = document.querySelector("#container svg");
           if (!svg) return;
-
           var svgClone = svg.cloneNode(true);
           svgClone.setAttribute("width", "2000");
           svgClone.setAttribute("height", "1500");
-
           var serializer = new XMLSerializer();
-          var svgString = serializer.serializeToString(svgClone);
-          var svgBlob = new Blob([svgString], {{ type: "image/svg+xml;charset=utf-8" }});
-          var URL = window.URL || window.webkitURL || window;
-          var blobURL = URL.createObjectURL(svgBlob);
-
+          var svgBlob = new Blob([serializer.serializeToString(svgClone)], {{ type: "image/svg+xml;charset=utf-8" }});
+          var blobURL = (window.URL || window.webkitURL).createObjectURL(svgBlob);
           var image = new Image();
           image.onload = function() {{
             var canvas = document.createElement("canvas");
-            canvas.width = 2000;
-            canvas.height = 1500;
+            canvas.width = 2000; canvas.height = 1500;
             var context = canvas.getContext("2d");
-            
             context.fillStyle = "#FFFFFF";
             context.fillRect(0, 0, canvas.width, canvas.height);
-            
             context.drawImage(image, 0, 0);
-
-            var imgURI = canvas.toDataURL("image/png");
             var a = document.createElement("a");
             a.download = "mindmap-bai-giang.png";
-            a.href = imgURI;
+            a.href = canvas.toDataURL("image/png");
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -210,7 +121,6 @@ def render_mindmap_svg(mermaid_code):
 
 PROMPT_MAP = """
 Từ nội dung tóm tắt trên, hãy tạo mã Mermaid flowchart dạng sơ đồ cây từ trái sang phải (`graph LR`).
-
 YÊU CẦU BẮT BUỘC:
 1. Bắt đầu bằng dòng: `graph LR`
 2. Giữ nguyên tiếng Việt có dấu.
@@ -312,8 +222,6 @@ with tab1:
 
 # --- TAB 2: AUDIO ---
 with tab2:
-    st.info("💡 **Hệ thống hỗ trợ tự động nén nhẹ dung lượng file.** Bạn chỉ việc kéo thả file MP3/M4A/WAV bất kỳ vào khung dưới đây!")
-
     uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
 
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
@@ -323,25 +231,16 @@ with tab2:
             st.warning("⚠️ Vui lòng tải file âm thanh lên trước!")
         else:
             client = genai.Client(api_key=api_key)
-            status = st.status("📥 Đang tiếp nhận file...", expanded=True)
+            status = st.status("📥 Đang tải file lên Gemini...", expanded=True)
             
             file_ext = os.path.splitext(uploaded_file.name)[1]
-            temp_raw_path = f"temp_raw{file_ext}"
-            temp_compressed_path = "temp_compressed.mp3"
+            temp_path = f"temp_input{file_ext}"
             
-            # Lưu file gốc
-            with open(temp_raw_path, "wb") as f:
+            with open(temp_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                # Tự động nén file để gửi lên AI cực nhanh
-                status.write("⚡ Đang tự động nén tối ưu dung lượng file âm thanh...")
-                is_compressed = compress_audio(temp_raw_path, temp_compressed_path)
-                
-                final_upload_path = temp_compressed_path if is_compressed else temp_raw_path
-                
-                status.write("🎙️ Đang tải audio lên Gemini...")
-                gemini_file = client.files.upload(file=final_upload_path)
+                gemini_file = client.files.upload(file=temp_path)
                 
                 status.write("🧠 Gemini đang lắng nghe & tóm tắt bài giảng...")
                 prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt có mốc thời gian."
@@ -363,6 +262,5 @@ with tab2:
                 status.update(label="❌ Lỗi xử lý!", state="error")
                 st.error(f"Đã xảy ra lỗi: {str(e)}")
             finally:
-                for p in [temp_raw_path, temp_compressed_path]:
-                    if os.path.exists(p):
-                        os.remove(p)
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
