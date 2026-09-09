@@ -76,7 +76,7 @@ def generate_content_with_retry(client, contents, max_retries=10, status_contain
             raise e
 
 def extract_video_id(url):
-    match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
+    match = re.search(r"(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})", url)
     return match.group(1) if match else None
 
 def render_mindmap_svg(mermaid_code):
@@ -127,7 +127,6 @@ def render_mindmap_svg(mermaid_code):
           var svgBlob = new Blob([svgString], {{type: "image/svg+xml;charset=utf-8"}});
           var url = URL.createObjectURL(svgBlob);
           
-          // Mở tab mới chứa ảnh để điện thoại giữ/lưu trực tiếp vào Album dễ dàng
           var win = window.open();
           if (win) {{
             win.document.write('<p style="font-family:sans-serif; text-align:center;"><b>Chạm và giữ vào ảnh bên dưới để Lưu về máy:</b></p><img src="' + url + '" style="max-width:100%;"/>');
@@ -171,32 +170,39 @@ with tab1:
                 st.error("❌ Link YouTube không hợp lệ!")
             else:
                 client = genai.Client(api_key=api_key)
-                status = st.status("🔍 Đang lấy phụ đề từ YouTube...", expanded=True)
+                status = st.status("🔍 Đang quét phụ đề YouTube...", expanded=True)
                 
-                proxy_list = []
-                try:
-                    res = requests.get("https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt", timeout=5)
-                    proxy_list = [f"http://{p.strip()}" for p in res.text.split("\n") if p.strip()][:10]
-                except:
-                    pass
-
                 transcript_data = None
-                for proxy in [None] + proxy_list:
+                try:
+                    # Lấy danh sách toàn bộ các loại phụ đề sẵn có
+                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                    
+                    # Ưu tiên lấy phụ đề Tiếng Việt hoặc Tiếng Anh (bao gồm cả Auto-generated)
                     try:
-                        proxies = {"http": proxy, "https": proxy} if proxy else None
-                        ytt_api = YouTubeTranscriptApi(proxies=proxies)
-                        transcript_list = ytt_api.list_transcripts(video_id)
-                        try:
-                            transcript = transcript_list.find_transcript(['vi', 'en'])
-                        except:
-                            transcript = transcript_list.find_generated_transcript(['vi', 'en'])
-                        transcript_data = transcript.fetch()
-                        break
+                        transcript = transcript_list.find_transcript(['vi', 'en'])
                     except:
-                        continue
+                        transcript = transcript_list.find_generated_transcript(['vi', 'en'])
+                    
+                    # Nếu là phụ đề tiếng Anh, tự động dịch sang tiếng Việt
+                    if transcript.language_code != 'vi' and transcript.is_translatable:
+                        try:
+                            transcript = transcript.translate('vi')
+                        except:
+                            pass
+                            
+                    transcript_data = transcript.fetch()
+                except Exception as e:
+                    # Phương án dự phòng thử tìm bất kỳ ngôn ngữ nào có sẵn
+                    try:
+                        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                        for t in transcript_list:
+                            transcript_data = t.fetch()
+                            break
+                    except:
+                        transcript_data = None
 
                 if transcript_data:
-                    status.write("🧩 Đang nhóm dữ liệu văn bản...")
+                    status.write("🧩 Đang phân đoạn dữ liệu văn bản...")
                     chunk_sec = chunk_time * 60
                     chunks, current_chunk, current_start = [], [], 0
                     
@@ -239,11 +245,11 @@ with tab1:
                     with st.expander("📄 Xem bản tóm tắt chi tiết"):
                         st.write(combined)
                 else:
-                    status.update(label="⚠️ Không tìm thấy phụ đề cho Video này!", state="error")
+                    status.update(label="⚠️ Không tải được phụ đề!", state="error")
                     st.markdown("""
                     <div class="warning-box">
-                        <h4 style="color: #b45309; margin-top:0;">💡 Video này không hỗ trợ phụ đề trực tiếp!</h4>
-                        <p style="color: #78350f;">Bạn tách file audio chỉ với 3 bước cực dễ:</p>
+                        <h4 style="color: #b45309; margin-top:0;">💡 YouTube đang chặn cào phụ đề tự động!</h4>
+                        <p style="color: #78350f;">Do cơ chế chống bot của YouTube, bạn có thể áp dụng cách tải Audio để AI nghe trực tiếp:</p>
                         <ol style="color: #78350f;">
                             <li>Copy link video YouTube này.</li>
                             <li>Vào trang: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> &rarr; Dán link và bấm tải file <b>MP3</b>.</li>
@@ -257,7 +263,7 @@ with tab2:
     st.markdown("""
     <div class="guide-box">
         <h4 style="color: #15803d; margin-top:0;">🎵 Mẹo tách nhạc MP3 từ YouTube cực nhanh:</h4>
-        <p style="color: #166534; margin-bottom: 5px;">Nếu bài giảng YouTube không có phụ đề, bạn tách file audio cực dễ chỉ với 3 bước:</p>
+        <p style="color: #166534; margin-bottom: 5px;">Nếu bài giảng YouTube bị chặn phụ đề, bạn tách file audio cực dễ chỉ với 3 bước:</p>
         <ol style="color: #166534; margin-bottom: 0;">
             <li>Copy link bài giảng trên YouTube.</li>
             <li>Vào trang web tách nhạc: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> hoặc <a href="https://y2mate.is/vi/" target="_blank"><b>y2mate.is</b></a> &rarr; Dán link và bấm tải file <b>MP3</b>.</li>
