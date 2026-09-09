@@ -1,10 +1,10 @@
 import streamlit as st
 import re
-import requests
 import os
 import time
+import subprocess
+import json
 from google import genai
-from youtube_transcript_api import YouTubeTranscriptApi
 import streamlit.components.v1 as components
 
 # CẤU HÌNH TRANG STREAMLIT
@@ -56,7 +56,7 @@ with st.sidebar:
         
     chunk_time = st.slider("Độ dài chia đoạn phụ đề (phút):", min_value=10, max_value=30, value=15)
 
-tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (MP3 / WAV)"])
+tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Tự động)", "🎙️ Tải File Âm Thanh (MP3 / WAV)"])
 
 MODEL_NAME = "gemini-3.6-flash"
 
@@ -74,10 +74,6 @@ def generate_content_with_retry(client, contents, max_retries=10, status_contain
                     time.sleep(wait_time)
                     continue
             raise e
-
-def extract_video_id(url):
-    match = re.search(r"(?:v=|\/|youtu\.be\/)([0-9A-Za-z_-]{11})", url)
-    return match.group(1) if match else None
 
 def render_mindmap_svg(mermaid_code):
     clean_code = re.sub(r'```mermaid\s*', '', mermaid_code)
@@ -155,6 +151,62 @@ YÊU CẦU BẮT BUỘC:
 5. Chỉ trả về mã Mermaid trong khối ```mermaid ... ```.
 """
 
+def get_yt_audio_or_sub(url):
+    """Sử dụng yt-dlp để vượt rào chống bot của YouTube"""
+    cmd = [
+        "yt-dlp",
+        "--skip-download",
+        "--write-sub",
+        "--write-auto-sub",
+        "--sub-lang", "vi,en",
+        "--sub-format", "json3",
+        "-o", "yt_sub",
+        url
+    ]
+    subprocess.run(cmd, capture_output=True)
+    
+    # Kiểm tra xem có file phụ đề json nào được tải xuống không
+    sub_file = None
+    for file in os.listdir("."):
+        if file.startswith("yt_sub") and file.endswith(".json3"):
+            sub_file = file
+            break
+            
+    if sub_file:
+        try:
+            with open(sub_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            os.remove(sub_file)
+            
+            lines = []
+            for event in data.get("events", []):
+                for seg in event.get("segs", []):
+                    utf8_text = seg.get("utf8", "").strip()
+                    if utf8_text and utf8_text != "\n":
+                        lines.append(utf8_text)
+            return " ".join(lines), "sub"
+        except:
+            pass
+
+    # Nếu không lấy được phụ đề, tải thẳng audio nhẹ về để Gemini tự nghe
+    audio_out = "yt_audio.mp3"
+    if os.path.exists(audio_out):
+        os.remove(audio_out)
+        
+    cmd_audio = [
+        "yt-dlp",
+        "-x",
+        "--audio-format", "mp3",
+        "--audio-quality", "9",
+        "-o", audio_out,
+        url
+    ]
+    subprocess.run(cmd_audio, capture_output=True)
+    if os.path.exists(audio_out):
+        return audio_out, "audio"
+        
+    return None, None
+
 # --- TAB 1: YOUTUBE ---
 with tab1:
     youtube_url = st.text_input("👇 Dán link YouTube bài giảng vào đây:", placeholder="https://www.youtube.com/watch?v=...")
@@ -165,74 +217,43 @@ with tab1:
         elif not youtube_url:
             st.warning("⚠️ Vui lòng dán link YouTube!")
         else:
-            video_id = extract_video_id(youtube_url)
-            if not video_id:
-                st.error("❌ Link YouTube không hợp lệ!")
-            else:
-                client = genai.Client(api_key=api_key)
-                status = st.status("🔍 Đang quét phụ đề YouTube...", expanded=True)
-                
-                transcript_data = None
+            client = genai.Client(api_key=api_key)
+            status = st.status("🔍 Đang kết nối và xử lý Video YouTube...", expanded=True)
+            
+            result_data, result_type = get_yt_audio_or_sub(youtube_url)
+            
+            if result_type == "sub":
+                status.write("🧠 Đã vượt rào YouTube thành công! AI đang tóm tắt nội dung...")
+                prompt = f"Tóm tắt các ý chính bài giảng sau bằng tiếng Việt chuẩn:\n\"{result_data[:30000]}\""
+                res = generate_content_with_retry(client, prompt, status_container=status)
+                combined = res.text
+
+                status.write("🎨 Đang vẽ sơ đồ tư duy...")
+                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
+                res_map = generate_content_with_retry(client, prompt_map, status_container=status)
+
+                status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
+
+                st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
+                render_mindmap_svg(res_map.text)
+
+                with st.expander("📄 Xem bản tóm tắt chi tiết"):
+                    st.write(combined)
+
+            elif result_type == "audio":
                 try:
-                    # Lấy danh sách toàn bộ các loại phụ đề sẵn có
-                    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                    status.write("🎙️ YouTube không cho cào chữ, đã tự động tải audio về để Gemini nghe trực tiếp...")
+                    gemini_file = client.files.upload(file=result_data)
                     
-                    # Ưu tiên lấy phụ đề Tiếng Việt hoặc Tiếng Anh (bao gồm cả Auto-generated)
-                    try:
-                        transcript = transcript_list.find_transcript(['vi', 'en'])
-                    except:
-                        transcript = transcript_list.find_generated_transcript(['vi', 'en'])
-                    
-                    # Nếu là phụ đề tiếng Anh, tự động dịch sang tiếng Việt
-                    if transcript.language_code != 'vi' and transcript.is_translatable:
-                        try:
-                            transcript = transcript.translate('vi')
-                        except:
-                            pass
-                            
-                    transcript_data = transcript.fetch()
-                except Exception as e:
-                    # Phương án dự phòng thử tìm bất kỳ ngôn ngữ nào có sẵn
-                    try:
-                        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                        for t in transcript_list:
-                            transcript_data = t.fetch()
-                            break
-                    except:
-                        transcript_data = None
-
-                if transcript_data:
-                    status.write("🧩 Đang phân đoạn dữ liệu văn bản...")
-                    chunk_sec = chunk_time * 60
-                    chunks, current_chunk, current_start = [], [], 0
-                    
-                    for item in transcript_data:
-                        text_str = item.get('text', '') if isinstance(item, dict) else item.text
-                        start_sec = item.get('start', 0) if isinstance(item, dict) else item.start
+                    while gemini_file.state.name == "PROCESSING":
+                        time.sleep(3)
+                        gemini_file = client.files.get(name=gemini_file.name)
                         
-                        current_chunk.append(text_str)
-                        if start_sec - current_start >= chunk_sec:
-                            start_m, end_m = int(current_start // 60), int(start_sec // 60)
-                            time_lbl = f"[{start_m//60:02d}:{start_m%60:02d} - {end_m//60:02d}:{end_m%60:02d}]"
-                            chunks.append((time_lbl, " ".join(current_chunk)))
-                            current_chunk, current_start = [], start_sec
-                            
-                    if current_chunk:
-                        start_m = int(current_start // 60)
-                        last_sec = transcript_data[-1].get('start', 0) if isinstance(transcript_data[-1], dict) else transcript_data[-1].start
-                        end_m = int(last_sec // 60)
-                        time_lbl = f"[{start_m//60:02d}:{start_m%60:02d} - {end_m//60:02d}:{end_m%60:02d}]"
-                        chunks.append((time_lbl, " ".join(current_chunk)))
-
-                    status.write("🧠 AI đang tóm tắt nội dung bài giảng...")
-                    summaries = []
-                    for i, (time_lbl, text) in enumerate(chunks):
-                        prompt = f"Tóm tắt ý chính bài giảng đoạn {time_lbl} bằng tiếng Việt chuẩn:\n\"{text}\"\nGiữ mốc thời gian {time_lbl} ở đầu các ý."
-                        res = generate_content_with_retry(client, prompt, status_container=status)
-                        summaries.append(res.text)
-
-                    combined = "\n\n".join(summaries)
-
+                    status.write("🧠 AI đang lắng nghe và tóm tắt bài giảng...")
+                    prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt."
+                    res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio], status_container=status)
+                    combined = res_audio.text
+                    
                     status.write("🎨 Đang vẽ sơ đồ tư duy...")
                     prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
                     res_map = generate_content_with_retry(client, prompt_map, status_container=status)
@@ -244,50 +265,23 @@ with tab1:
 
                     with st.expander("📄 Xem bản tóm tắt chi tiết"):
                         st.write(combined)
-                else:
-                    status.update(label="⚠️ Không tải được phụ đề!", state="error")
-                    st.markdown("""
-                    <div class="warning-box">
-                        <h4 style="color: #b45309; margin-top:0;">💡 YouTube đang chặn cào phụ đề tự động!</h4>
-                        <p style="color: #78350f;">Do cơ chế chống bot của YouTube, bạn có thể áp dụng cách tải Audio để AI nghe trực tiếp:</p>
-                        <ol style="color: #78350f;">
-                            <li>Copy link video YouTube này.</li>
-                            <li>Vào trang: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> &rarr; Dán link và bấm tải file <b>MP3</b>.</li>
-                            <li>Chuyển qua <b>Tab "Tải File Âm Thanh"</b> ở trên để thả file MP3 lên!</li>
-                        </ol>
-                    </div>
-                    """, unsafe_allow_html=True)
+                finally:
+                    if os.path.exists(result_data):
+                        os.remove(result_data)
+            else:
+                status.update(label="❌ Lỗi tải dữ liệu video!", state="error")
+                st.error("Không thể kết nối đến video YouTube này. Vui lòng kiểm tra lại đường link!")
 
 # --- TAB 2: FILE AUDIO ---
 with tab2:
     st.markdown("""
     <div class="guide-box">
-        <h4 style="color: #15803d; margin-top:0;">🎵 Mẹo tách nhạc MP3 từ YouTube cực nhanh:</h4>
-        <p style="color: #166534; margin-bottom: 5px;">Nếu bài giảng YouTube bị chặn phụ đề, bạn tách file audio cực dễ chỉ với 3 bước:</p>
-        <ol style="color: #166534; margin-bottom: 0;">
-            <li>Copy link bài giảng trên YouTube.</li>
-            <li>Vào trang web tách nhạc: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> hoặc <a href="https://y2mate.is/vi/" target="_blank"><b>y2mate.is</b></a> &rarr; Dán link và bấm tải file <b>MP3</b>.</li>
-            <li>Thả file MP3 vừa tải vào ô bên dưới để AI tiến hành tạo Mindmap ngay!</li>
-        </ol>
+        <h4 style="color: #15803d; margin-top:0;">🎵 Tải trực tiếp file MP3:</h4>
+        <p style="color: #166534; margin-bottom: 0;">Nếu bạn có sẵn file ghi âm bài giảng MP3/WAV, chỉ cần thả trực tiếp vào ô bên dưới để AI tự động tạo Mindmap!</p>
     </div>
     """, unsafe_allow_html=True)
 
     uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây (MP3, M4A, WAV):", type=["mp3", "m4a", "wav", "mp4"])
-
-    if uploaded_file is not None:
-        file_size_mb = uploaded_file.size / (1024 * 1024)
-        if file_size_mb > 100:
-            st.markdown(f"""
-            <div class="alert-compress-box">
-                <h4 style="color: #1e40af; margin-top:0;">⚠️ File của bạn khá nặng ({file_size_mb:.1f}MB)!</h4>
-                <p style="color: #1e3a8a; margin-bottom: 0;">
-                    Tải file trên 100MB qua mạng di động/Streamlit sẽ mất nhiều thời gian. Để AI chạy trong chớp mắt, bạn nên nén nhẹ file lại:<br>
-                    • Truy cập trang: <a href="https://online-audio-converter.com/vi/" target="_blank"><b>online-audio-converter.com</b></a><br>
-                    • Upload file &rarr; Chọn định dạng <b>MP3</b> chất lượng <b>Economy 64 kbit/s</b> &rarr; Bấm Chuyển đổi.<br>
-                    • File sẽ giảm còn 10MB–20MB mà chất lượng giọng nói vẫn giữ nguyên 100%.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
 
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
         if not api_key:
