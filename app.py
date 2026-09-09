@@ -98,11 +98,14 @@ def render_mindmap_svg(mermaid_code):
           cursor: pointer;
           box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         }}
+        .dl-btn:hover {{
+          background: #4338ca;
+        }}
       </style>
     </head>
     <body>
       <div id="wrapper">
-        <button class="dl-btn" onclick="downloadSVG()">📸 Tải Ảnh Sơ Đồ</button>
+        <button class="dl-btn" onclick="downloadPNG()">📸 Tải Ảnh PNG</button>
         <div id="container">
           <pre class="mermaid">
           {clean_code}
@@ -131,19 +134,41 @@ def render_mindmap_svg(mermaid_code):
           }}
         }}, 800);
 
-        function downloadSVG() {{
+        function downloadPNG() {{
           var svg = document.querySelector("#container svg");
-          if(!svg) return;
+          if (!svg) return;
+
+          var svgClone = svg.cloneNode(true);
+          svgClone.setAttribute("width", "2000");
+          svgClone.setAttribute("height", "1500");
+
           var serializer = new XMLSerializer();
-          var source = serializer.serializeToString(svg);
-          var svgBlob = new Blob([source], {{type: "image/svg+xml;charset=utf-8"}});
-          var svgUrl = URL.createObjectURL(svgBlob);
-          var downloadLink = document.createElement("a");
-          downloadLink.href = svgUrl;
-          downloadLink.download = "mindmap-bai-giang.svg";
-          document.body.appendChild(downloadLink);
-          downloadLink.click();
-          document.body.removeChild(downloadLink);
+          var svgString = serializer.serializeToString(svgClone);
+          var svgBlob = new Blob([svgString], {{ type: "image/svg+xml;charset=utf-8" }});
+          var URL = window.URL || window.webkitURL || window;
+          var blobURL = URL.createObjectURL(svgBlob);
+
+          var image = new Image();
+          image.onload = function() {{
+            var canvas = document.createElement("canvas");
+            canvas.width = 2000;
+            canvas.height = 1500;
+            var context = canvas.getContext("2d");
+            
+            context.fillStyle = "#FFFFFF";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            context.drawImage(image, 0, 0);
+
+            var imgURI = canvas.toDataURL("image/png");
+            var a = document.createElement("a");
+            a.download = "mindmap-bai-giang.png";
+            a.href = imgURI;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }};
+          image.src = blobURL;
         }}
       </script>
     </body>
@@ -253,11 +278,11 @@ with tab1:
 with tab2:
     st.markdown("""
     <div class="guide-box">
-        <h4>💡 Hướng dẫn tải MP3 cực nhanh (Chỉ mất 5 - 10 giây):</h4>
+        <h4>💡 Hướng dẫn tải MP3 cực nhanh (Chỉ mất 5 giây):</h4>
         <ol>
             <li>Mở YouTube và <b>Copy link video</b> bài giảng bạn muốn tóm tắt.</li>
-            <li>Truy cập trang web tải siêu tốc: <a href="https://cobalt.tools" target="_blank"><b>cobalt.tools</b></a> hoặc <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a>.</li>
-            <li>Dán link YouTube vào ô tìm kiếm &rarr; Chọn định dạng <b>MP3</b> &rarr; Bấm <b>Tải về / Download</b>.</li>
+            <li>Truy cập trang web: <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a>.</li>
+            <li>Dán link YouTube vào ô tìm kiếm &rarr; Chọn định dạng <b>MP3</b> &rarr; Bấm <b>Convert / Download</b>.</li>
             <li>Kéo thả file MP3 vừa tải vào khung bên dưới để AI tự động tạo Mindmap!</li>
         </ol>
     </div>
