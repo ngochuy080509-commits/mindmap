@@ -10,14 +10,13 @@ import streamlit.components.v1 as components
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
 
-# CSS GIAO DIỆN XỊN XÒ & BẢNG THÔNG BÁO TẮM NẮNG
+# CSS GIAO DIỆN
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
     .main { background: #f8fafc; }
     
-    /* Nút bấm Gradient siêu đẹp */
     .stButton>button { 
         width: 100%; border-radius: 12px; height: 3.2em; font-weight: 700;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
@@ -26,19 +25,16 @@ st.markdown("""
     }
     .stButton>button:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4); }
 
-    /* Bảng hướng dẫn màu xanh nhẹ nhàng */
     .guide-box {
         background-color: #f0fdf4; border: 1px solid #bbf7d0;
         padding: 16px; border-radius: 12px; margin-bottom: 20px;
     }
     
-    /* Bảng cảnh báo video không phụ đề */
     .warning-box { 
         background-color: #fffbebf8; border: 1px solid #fde68a; 
         padding: 18px; border-radius: 12px; margin-top: 15px; 
     }
 
-    /* Bảng mẹo nén file âm thanh */
     .alert-compress-box { 
         background-color: #eff6ff; border: 1px solid #bfdbfe; 
         padding: 16px; border-radius: 12px; margin-bottom: 20px; 
@@ -47,7 +43,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🧠 AI Bài Giảng - Mindmap Trực Quan & Đẹp Mắt")
-st.caption("Biến mọi video bài giảng YouTube hoặc Audio MP3 thành Sơ đồ tư duy sinh động!")
+st.caption("Biến mọi video bài giảng YouTube hoặc Audio MP3/M4A thành Sơ đồ tư duy sinh động!")
 
 api_key = st.secrets.get("GEMINI_API_KEY", None)
 
@@ -60,11 +56,11 @@ with st.sidebar:
         
     chunk_time = st.slider("Độ dài chia đoạn phụ đề (phút):", min_value=10, max_value=30, value=15)
 
-tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (MP3 / Audio)"])
+tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (M4A / MP3)"])
 
-MODEL_NAME = "gemini-1.5-flash"
+# ĐÃ ĐỔI TÊN MODEL SANG GEMINI 3.6 THEO YÊU CẦU
+MODEL_NAME = "gemini-3.6-flash"
 
-# HÀM CHỐNG LỖI 503 OVERLOAD (TỰ ĐỘNG THỬ LẠI 10 LẦN NẾU SERVER GOOGLE BẬN)
 def generate_content_with_retry(client, contents, max_retries=10, status_container=None):
     for attempt in range(max_retries):
         try:
@@ -84,7 +80,6 @@ def extract_video_id(url):
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     return match.group(1) if match else None
 
-# RENDER MINDMAP ĐẸP, CÓ NÚT TẢI XIN XÒ VÀ PAN-ZOOM TRỰC QUAN
 def render_mindmap_svg(mermaid_code):
     clean_code = re.sub(r'```mermaid\s*', '', mermaid_code)
     clean_code = re.sub(r'```\s*$', '', clean_code).strip()
@@ -244,49 +239,50 @@ with tab1:
                     with st.expander("📄 Xem bản tóm tắt chi tiết"):
                         st.write(combined)
                 else:
-                    # Ô NHẮC NHỞ CHUYỂN SANG TAB FILE ÂM THANH NẾU LINK YOUTUBE KHÔNG CÓ PHỤ ĐỀ
                     status.update(label="⚠️ Không tìm thấy phụ đề cho Video này!", state="error")
                     st.markdown("""
                     <div class="warning-box">
                         <h4 style="color: #b45309; margin-top:0;">💡 Video này không hỗ trợ phụ đề trực tiếp!</h4>
-                        <p style="color: #78350f;">Đừng lo, bạn chỉ cần thực hiện 3 bước đơn giản này:</p>
+                        <p style="color: #78350f;">Hãy tải file âm thanh nhẹ dạng M4A để AI xử lý:</p>
                         <ol style="color: #78350f;">
                             <li>Copy link video YouTube này.</li>
-                            <li>Vào trang tách nhạc miễn phí: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> hoặc <a href="https://y2mate.is/vi/" target="_blank"><b>y2mate.is</b></a> &rarr; Dán link và tải file <b>MP3</b> về máy.</li>
-                            <li>Chuyển qua <b>Tab "Tải File Âm Thanh"</b> ở trên để upload file, AI sẽ xử lý cực mượt!</li>
+                            <li>Vào trang: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> &rarr; Dán link vào.</li>
+                            <li>Chọn định dạng tải xuống là <b>M4A</b> để file siêu nhẹ (dưới 20MB) rồi bấm Download.</li>
+                            <li>Chuyển sang <b>Tab "Tải File Âm Thanh"</b> ở trên để upload file vừa tải về!</li>
                         </ol>
                     </div>
                     """, unsafe_allow_html=True)
 
 # --- TAB 2: FILE AUDIO ---
 with tab2:
-    # 1. Ô HƯỚNG DẪN CHUYỂN MP3 BẰNG YTMP3
     st.markdown("""
     <div class="guide-box">
-        <h4 style="color: #15803d; margin-top:0;">🎵 Mẹo tách nhạc MP3 từ YouTube cực nhanh:</h4>
-        <p style="color: #166534; margin-bottom: 5px;">Nếu bài giảng YouTube không có phụ đề, bạn tách file audio cực dễ chỉ với 3 bước:</p>
+        <h4 style="color: #15803d; margin-top:0;">⚡ Hướng dẫn tải file M4A siêu nhẹ (Dưới 20MB):</h4>
+        <p style="color: #166534; margin-bottom: 5px;">Để tránh bị treo khi upload file nặng, hãy chọn đúng định dạng M4A theo các bước:</p>
         <ol style="color: #166534; margin-bottom: 0;">
             <li>Copy link bài giảng trên YouTube.</li>
-            <li>Vào trang web tách nhạc: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> hoặc <a href="https://y2mate.is/vi/" target="_blank"><b>y2mate.is</b></a> &rarr; Dán link và bấm tải file <b>MP3</b>.</li>
-            <li>Thả file MP3 vừa tải vào ô bên dưới để AI tiến hành tạo Mindmap ngay!</li>
+            <li>Vào trang web: <a href="https://ytmp3.nu/" target="_blank"><b>ytmp3.nu</b></a> &rarr; Dán link YouTube vào ô tìm kiếm.</li>
+            <li>Tại menu chọn định dạng (đang mặc định là MP3), bấm đổi sang <b>M4A</b> &rarr; Bấm <b>Convert / Download</b>.</li>
+            <li>Thả file <b>.m4a</b> vừa tải vào ô bên dưới để AI tạo Mindmap trong vài giây!</li>
         </ol>
     </div>
     """, unsafe_allow_html=True)
 
-    # 2. Ô GỢI Ý NÉN FILE ÂM THANH BẰNG ONLINE AUDIO CONVERTER
-    st.markdown("""
-    <div class="alert-compress-box">
-        <h4 style="color: #1e40af; margin-top:0;">⚡ Mẹo giúp AI xử lý file siêu nhanh (Tránh lỗi nghẽn mạng):</h4>
-        <p style="color: #1e3a8a; margin-bottom: 0;">
-            Nếu file của bạn dài hoặc nặng (>20MB), hãy nén dung lượng file chỉ trong 5 giây để AI chạy siêu tốc:<br>
-            • Truy cập trang: <a href="https://online-audio-converter.com/vi/" target="_blank"><b>online-audio-converter.com</b></a><br>
-            • Tải file audio lên &rarr; Chọn mức chất lượng <b>Tiết kiệm (Economy 64 kbit/s)</b> &rarr; Bấm <b>Chuyển đổi</b>.<br>
-            • File sẽ gọn nhẹ lại $80\%$ giúp tải lên Gemini trong chớp mắt!
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây (M4A, MP3, WAV):", type=["m4a", "mp3", "wav", "mp4"])
 
-    uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây (MP3, M4A, WAV):", type=["mp3", "m4a", "wav", "mp4"])
+    if uploaded_file is not None:
+        file_size_mb = uploaded_file.size / (1024 * 1024)
+        if file_size_mb > 100:
+            st.markdown(f"""
+            <div class="alert-compress-box">
+                <h4 style="color: #1e40af; margin-top:0;">⚠️ File của bạn khá nặng ({file_size_mb:.1f}MB)!</h4>
+                <p style="color: #1e3a8a; margin-bottom: 0;">
+                    File MP3 trên 100MB sẽ tải rất lâu. Bạn nên nén lại thành file M4A chỉ còn 15MB bằng cách:<br>
+                    • Truy cập trang: <a href="https://online-audio-converter.com/vi/" target="_blank"><b>online-audio-converter.com</b></a><br>
+                    • Tải file lên &rarr; Chọn định dạng <b>m4a</b> hoặc chọn mức <b>Economy 64 kbit/s</b> &rarr; Bấm Chuyển đổi.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
 
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
         if not api_key:
@@ -304,7 +300,6 @@ with tab2:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                # 1. Upload file lên Gemini File API
                 gemini_file = client.files.upload(file=temp_path)
                 status.write("✅ Tải file lên thành công! Đang chờ Server xử lý...")
                 
@@ -315,14 +310,12 @@ with tab2:
                 if gemini_file.state.name == "FAILED":
                     raise Exception("Lỗi xử lý file âm thanh trên Server Google.")
 
-                # 2. Tóm tắt với cơ chế Auto-Retry chống lỗi 503
                 status.write("🧠 AI đang lắng nghe và phân tích bài giảng...")
                 prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt có mốc thời gian."
                 
                 res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio], status_container=status)
                 combined = res_audio.text
                 
-                # 3. Vẽ Mindmap đẹp mắt
                 status.write("🎨 Đang vẽ sơ đồ tư duy...")
                 prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
                 res_map = generate_content_with_retry(client, prompt_map, status_container=status)
