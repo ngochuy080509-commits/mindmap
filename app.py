@@ -42,7 +42,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🧠 AI Bài Giảng - Mindmap Trực Quan & Đẹp Mắt")
+st.title("🧠 AI Bài Giảng - Mindmap Trực Quan")
 st.caption("Biến mọi video bài giảng YouTube hoặc Audio MP3 thành Sơ đồ tư duy sinh động!")
 
 api_key = st.secrets.get("GEMINI_API_KEY", None)
@@ -52,11 +52,11 @@ with st.sidebar:
     if not api_key:
         api_key = st.text_input("🔑 Nhập Gemini API Key:", type="password")
     else:
-        st.success("✅ Hệ thống đã sẵn sàng nè!")
+        st.success("✅ Đã kết nối API thành công!")
         
     chunk_time = st.slider("Độ dài chia đoạn phụ đề (phút):", min_value=10, max_value=30, value=15)
 
-tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Tự động)", "🎙️ Tải File Âm Thanh (MP3 / WAV)"])
+tab1, tab2 = st.tabs(["🎥 Qua Link YouTube", "🎙️ Tải File Âm Thanh"])
 
 MODEL_NAME = "gemini-3.6-flash"
 
@@ -70,7 +70,7 @@ def generate_content_with_retry(client, contents, max_retries=10, status_contain
                 if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 4
                     if status_container:
-                        status_container.write(f"🌸 Bé AI đang hơi mệt xíu, đợi tớ một chút xíu thôi nhaa ({attempt + 1}/{max_retries})... 💕")
+                        status_container.write(f"⏳ Đang xếp hàng xử lý, chờ chút nha ({attempt + 1}/{max_retries})...")
                     time.sleep(wait_time)
                     continue
             raise e
@@ -101,7 +101,7 @@ def render_mindmap_svg(mermaid_code):
     </head>
     <body>
       <div id="wrapper">
-        <button class="dl-btn" onclick="downloadImage()">📸 Tải Ảnh Mindmap Cực Nét</button>
+        <button class="dl-btn" onclick="downloadImage()">📸 Tải Ảnh Mindmap</button>
         <div id="container"><pre class="mermaid">{clean_code}</pre></div>
       </div>
       <script>
@@ -146,8 +146,8 @@ def render_mindmap_svg(mermaid_code):
             var win = window.open();
             if (win) {{
               win.document.write('<div style="text-align:center; font-family:sans-serif; padding:10px;">' +
-                '<h3 style="color:#7c3aed;">✨ Sơ đồ tư duy của cậu đây nè! ✨</h3>' +
-                '<p style="color:#666;">Chạm và giữ vào hình bên dưới để <b>Lưu về máy</b> nha 💖</p>' +
+                '<h3 style="color:#4f46e5;">📌 Sơ đồ tư duy của bạn</h3>' +
+                '<p style="color:#666;">Chạm giữ vào hình bên dưới để <b>Lưu ảnh</b> nhé</p>' +
                 '<img src="' + pngUrl + '" style="max-width:100%; height:auto; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.1);"/>' +
                 '</div>');
             }}
@@ -229,26 +229,26 @@ with tab1:
 
     if st.button("🚀 Tạo Mindmap từ Link YouTube", type="primary"):
         if not api_key:
-            st.error("❌ Vui lòng nhập Gemini API Key nè!")
+            st.error("❌ Vui lòng nhập Gemini API Key!")
         elif not youtube_url:
-            st.warning("⚠️ Vui lòng dán link YouTube nha!")
+            st.warning("⚠️ Vui lòng dán link YouTube!")
         else:
             client = genai.Client(api_key=api_key)
-            status = st.status("🎀 Chờ một chút nhé, bé AI đang xử lý video cho cậu nè...", expanded=True)
+            status = st.status("⏳ Chờ một chút nhé, AI đang tải nội dung video...", expanded=True)
             
             result_data, result_type = get_yt_audio_or_sub(youtube_url)
             
             if result_type == "sub":
-                status.write("✨ Bé AI đã lấy nội dung xong rồi! Đang tóm tắt siêu tốc nè...")
+                status.write("📝 Đã lấy xong dữ liệu, đang tóm tắt nội dung...")
                 prompt = f"Tóm tắt các ý chính bài giảng sau bằng tiếng Việt chuẩn:\n\"{result_data[:30000]}\""
                 res = generate_content_with_retry(client, prompt, status_container=status)
                 combined = res.text
 
-                status.write("🎨 Đang vẽ sơ đồ tư duy xinh xắn cho cậu...")
+                status.write("🎨 Đang vẽ sơ đồ tư duy...")
                 prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
                 res_map = generate_content_with_retry(client, prompt_map, status_container=status)
 
-                status.update(label="🎉 Xong rồi nè! Xem sơ đồ bên dưới nha!", state="complete", expanded=False)
+                status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
 
                 st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
                 render_mindmap_svg(res_map.text)
@@ -258,23 +258,23 @@ with tab1:
 
             elif result_type == "audio":
                 try:
-                    status.write("🎧 Bé AI đang tập trung lắng nghe bài giảng giúp cậu nè...")
+                    status.write("🎙️ Đang phân tích âm thanh video...")
                     gemini_file = client.files.upload(file=result_data)
                     
                     while gemini_file.state.name == "PROCESSING":
                         time.sleep(3)
                         gemini_file = client.files.get(name=gemini_file.name)
                         
-                    status.write("🧠 Đang tổng hợp lại các ý quan trọng nè...")
+                    status.write("🧠 AI đang tổng hợp các ý chính...")
                     prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt."
                     res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio], status_container=status)
                     combined = res_audio.text
                     
-                    status.write("🎨 Đang vẽ sơ đồ tư duy xinh xắn cho cậu...")
+                    status.write("🎨 Đang vẽ sơ đồ tư duy...")
                     prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
                     res_map = generate_content_with_retry(client, prompt_map, status_container=status)
 
-                    status.update(label="🎉 Xong rồi nè! Xem sơ đồ bên dưới nha!", state="complete", expanded=False)
+                    status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
 
                     st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
                     render_mindmap_svg(res_map.text)
@@ -285,28 +285,28 @@ with tab1:
                     if os.path.exists(result_data):
                         os.remove(result_data)
             else:
-                status.update(label="😿 Hơi lỗi một xíu rồi!", state="error")
-                st.error("Không thể kết nối đến video YouTube này. Vui lòng kiểm tra lại đường link nha!")
+                status.update(label="❌ Lỗi kết nối video!", state="error")
+                st.error("Không thể kết nối đến video YouTube này. Bạn kiểm tra lại đường link nha!")
 
 # --- TAB 2: FILE AUDIO ---
 with tab2:
     st.markdown("""
     <div class="guide-box">
         <h4 style="color: #15803d; margin-top:0;">🎵 Tải trực tiếp file MP3:</h4>
-        <p style="color: #166534; margin-bottom: 0;">Nếu bạn có sẵn file ghi âm bài giảng MP3/WAV, chỉ cần thả trực tiếp vào ô bên dưới để AI tự động tạo Mindmap nha!</p>
+        <p style="color: #166534; margin-bottom: 0;">Nếu bạn có sẵn file ghi âm bài giảng MP3/WAV, chỉ cần thả vào ô bên dưới để AI tự động tạo Mindmap nha!</p>
     </div>
     """, unsafe_allow_html=True)
 
-    uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây (MP3, M4A, WAV):", type=["mp3", "m4a", "wav", "mp4"])
+    uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng (MP3, M4A, WAV):", type=["mp3", "m4a", "wav", "mp4"])
 
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
         if not api_key:
-            st.error("❌ Vui lòng nhập Gemini API Key nha!")
+            st.error("❌ Vui lòng nhập Gemini API Key!")
         elif not uploaded_file:
-            st.warning("⚠️ Vui lòng tải file âm thanh lên trước nè!")
+            st.warning("⚠️ Vui lòng tải file âm thanh lên trước!")
         else:
             client = genai.Client(api_key=api_key)
-            status = st.status("🎀 Đang tải file lên, chờ bé AI một chút nhé...", expanded=True)
+            status = st.status("⏳ Đang tải file lên, chờ một chút nhé...", expanded=True)
             
             file_ext = os.path.splitext(uploaded_file.name)[1]
             temp_path = f"temp_input{file_ext}"
@@ -316,26 +316,26 @@ with tab2:
                 
             try:
                 gemini_file = client.files.upload(file=temp_path)
-                status.write("✅ Tải file lên xong rồi! Đang xử lý nè...")
+                status.write("✅ Đã nhận file, đang xử lý...")
                 
                 while gemini_file.state.name == "PROCESSING":
                     time.sleep(3)
                     gemini_file = client.files.get(name=gemini_file.name)
                     
                 if gemini_file.state.name == "FAILED":
-                    raise Exception("Lỗi xử lý file âm thanh rồi nà.")
+                    raise Exception("Không thể xử lý file âm thanh này.")
 
-                status.write("🎧 Bé AI đang tập trung nghe bài giảng nè...")
+                status.write("🎧 AI đang lắng nghe và tóm tắt bài giảng...")
                 prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt có mốc thời gian."
                 
                 res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio], status_container=status)
                 combined = res_audio.text
                 
-                status.write("🎨 Đang vẽ sơ đồ tư duy xinh xắn cho cậu...")
+                status.write("🎨 Đang vẽ sơ đồ tư duy...")
                 prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
                 res_map = generate_content_with_retry(client, prompt_map, status_container=status)
 
-                status.update(label="🎉 Xong rồi nè! Xem sơ đồ bên dưới nha!", state="complete", expanded=False)
+                status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
 
                 st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
                 render_mindmap_svg(res_map.text)
@@ -343,8 +343,8 @@ with tab2:
                 with st.expander("📄 Xem bản tóm tắt chi tiết"):
                     st.write(combined)
             except Exception as e:
-                status.update(label="😿 Hơi lỗi một xíu rồi!", state="error")
-                st.error(f"Đã xảy ra lỗi: {str(e)}")
+                status.update(label="❌ Có lỗi xảy ra!", state="error")
+                st.error(f"Lỗi: {str(e)}")
             finally:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
