@@ -6,6 +6,7 @@ import time
 from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 import streamlit.components.v1 as components
+from pydub import AudioSegment
 
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
@@ -56,14 +57,14 @@ with st.sidebar:
 
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (Không phụ đề)"])
 
-MODEL_NAME = "gemini-3.6-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
-def generate_content_with_retry(client, contents, max_retries=3):
+def generate_content_with_retry(client, contents, max_retries=5):
     for attempt in range(max_retries):
         try:
             return client.models.generate_content(model=MODEL_NAME, contents=contents)
         except Exception as e:
-            if "503" in str(e) or "UNAVAILABLE" in str(e):
+            if ("503" in str(e) or "UNAVAILABLE" in str(e) or "high demand" in str(e).lower()):
                 if attempt < max_retries - 1:
                     time.sleep(3 * (attempt + 1))
                     continue
@@ -256,7 +257,6 @@ with tab2:
 
     uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
 
-    # CHỈ HIỆN KHUNG CẢNH BÁO NẾU FILE > 100MB
     if uploaded_file is not None:
         file_size_mb = uploaded_file.size / (1024 * 1024)
         if file_size_mb > 100:
@@ -279,7 +279,7 @@ with tab2:
             st.warning("⚠️ Vui lòng tải file âm thanh lên trước!")
         else:
             client = genai.Client(api_key=api_key)
-            status = st.status("📥 Đang tải file lên Gemini...", expanded=True)
+            status = st.status("📥 Đang chuẩn bị phân tích file âm thanh...", expanded=True)
             
             file_ext = os.path.splitext(uploaded_file.name)[1]
             temp_path = f"temp_input{file_ext}"
@@ -288,12 +288,30 @@ with tab2:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                gemini_file = client.files.upload(file=temp_path)
+                # CẮT FILE THÀNH CÁC PHẦN NHỎ 15 PHÚT NẾU FILE NẶNG/DÀI
+                status.write("✂️ Đang tự động chia nhỏ bài giảng thành các đoạn 15 phút...")
+                audio = AudioSegment.from_file(temp_path)
+                chunk_length_ms = 15 * 60 * 1000  # 15 phút
+                chunks = [audio[i:i + chunk_length_ms] for i in range(0, len(audio), chunk_length_ms)]
                 
-                status.write("🧠 Gemini đang lắng nghe & tóm tắt bài giảng...")
-                prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt có mốc thời gian."
-                res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio])
-                combined = res_audio.text
+                all_summaries = []
+                
+                for idx, chunk in enumerate(chunks):
+                    chunk_filename = f"temp_chunk_{idx}.mp3"
+                    chunk.export(chunk_filename, format="mp3")
+                    
+                    status.write(f"🧠 AI đang nghe đoạn {idx + 1}/{len(chunks)}...")
+                    gemini_file = client.files.upload(file=chunk_filename)
+                    
+                    prompt_audio = f"Tóm tắt chi tiết ý chính của bài giảng ở đoạn {idx + 1} này bằng tiếng Việt có mốc thời gian."
+                    res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio])
+                    all_summaries.append(res_audio.text)
+                    
+                    # Dọn dẹp file tạm đoạn nhỏ
+                    if os.path.exists(chunk_filename):
+                        os.remove(chunk_filename)
+
+                combined = "\n\n".join(all_summaries)
                 
                 status.write("🎨 Đang vẽ sơ đồ tư duy...")
                 prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
