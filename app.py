@@ -20,7 +20,6 @@ st.markdown("""
     html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
     .main { background: #f8fafc; }
     
-    /* Ẩn giao diện quản trị Streamlit */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -61,13 +60,13 @@ with st.sidebar:
         "🔑 Nhập Gemini API Key:", 
         value=st.session_state.user_api_key, 
         type="password",
-        help="Mỗi người dùng cần nhập 1 Key cá nhân để tránh bị nghẽn lượt dùng."
+        help="Mỗi người dùng nhập 1 Key cá nhân để chạy ổn định nhất."
     )
     if sidebar_key:
-        st.session_state.user_api_key = sidebar_key
-        st.success("✅ Đã kết nối API Key!")
+        st.session_state.user_api_key = sidebar_key.strip()
+        st.success("✅ Đã nhận API Key!")
     else:
-        st.warning("⚠️ Bắt buộc có Key để dùng app nha.")
+        st.warning("⚠️ Bắt buộc nhập Key để dùng app nha.")
 
     st.markdown("---")
     st.markdown("### ❓ Chưa có API Key?")
@@ -75,7 +74,7 @@ with st.sidebar:
     1. Vào [Google AI Studio](https://aistudio.google.com/)
     2. Đăng nhập Gmail bất kỳ
     3. Bấm **Get API key** ➔ **Create API key**
-    4. Copy đoạn mã dán vào đây là xong!
+    4. Copy mã dán vào đây là xong!
     """)
 
 # HIỂN THỊ KHUNG NHẬP KEY TRÊN MÀN HÌNH CHÍNH NẾU CHƯA CÓ KEY
@@ -83,28 +82,26 @@ if not st.session_state.user_api_key:
     st.markdown("""
     <div class="guide-card">
         <h4 style="color: #0369a1; margin-top:0;">🔑 Vui lòng nhập Gemini API Key để bắt đầu:</h4>
-        <p style="color: #0284c7; margin-bottom: 8px;">Để ứng dụng chạy mượt mà và không bao giờ bị nghẽn, mỗi bạn chỉ cần lấy 1 Key miễn phí từ Google xài riêng nha!</p>
+        <p style="color: #0284c7; margin-bottom: 8px;">Để ứng dụng chạy mượt mà và không bị nghẽn, mỗi bạn chỉ cần lấy 1 Key miễn phí từ Google xài riêng nha!</p>
     </div>
     """, unsafe_allow_html=True)
     
     main_key_input = st.text_input("👉 Dán Gemini API Key của bạn vào đây:", type="password", key="main_key")
     if main_key_input:
-        st.session_state.user_api_key = main_key_input
+        st.session_state.user_api_key = main_key_input.strip()
         st.rerun()
 
     with st.expander("📖 Xem hướng dẫn chi tiết cách lấy API Key miễn phí (Chỉ mất 1 phút)"):
         st.markdown("""
-        **Bước 1:** Truy cập trang web chính thức của Google: [https://aistudio.google.com/](https://aistudio.google.com/)
+        **Bước 1:** Truy cập trang web chính thức: [https://aistudio.google.com/](https://aistudio.google.com/)
         
-        **Bước 2:** Đăng nhập bằng bất kỳ tài khoản **Gmail** nào của bạn.
+        **Bước 2:** Đăng nhập bằng bất kỳ tài khoản **Gmail** nào.
         
-        **Bước 3:** Nhấp vào nút **`Get API key`** (ở góc trên hoặc thanh menu).
+        **Bước 3:** Nhấp vào nút **`Get API key`** ➔ **`Create API key`**.
         
-        **Bước 4:** Nhấp vào **`Create API key`** (Tạo khóa API mới).
+        **Bước 4:** Copy chuỗi ký tự bắt đầu bằng `AIzaSy...` và dán vào ô bên trên!
         
-        **Bước 5:** Sao chép (Copy) chuỗi ký tự bắt đầu bằng `AIzaSy...` và dán vào ô bên trên!
-        
-        *(Lưu ý: API Key là hoàn toàn **MIỄN PHÍ** từ Google và được dùng riêng cho tài khoản của bạn).*
+        *(Lưu ý: API Key hoàn toàn **MIỄN PHÍ** từ Google).*
         """)
     st.divider()
 
@@ -112,22 +109,50 @@ active_api_key = st.session_state.user_api_key
 
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube", "🎙️ Tải File Âm Thanh"])
 
-# HÀM GỌI API GEMINI
-def generate_content_with_retry(client, contents, max_retries=5, status_container=None):
+# HÀM GỌI API GEMINI BẮT LỖI VÀ THÔNG BÁO TẬN TÌNH
+def generate_content_with_retry(client, contents, max_retries=3, status_container=None):
     for attempt in range(max_retries):
         try:
             return client.models.generate_content(model=MODEL_NAME, contents=contents)
         except Exception as e:
             err_msg = str(e).lower()
-            if any(k in err_msg for k in ["503", "unavailable", "overloaded", "429", "resource_exhausted"]):
+            
+            # 1. BẮT LỖI CẠN QUOTA (429 / RESOURCE_EXHAUSTED)
+            if "429" in err_msg or "resource_exhausted" in err_msg or "quota" in err_msg:
+                st.error("""
+                🛑 **Key này đã hết hạn mức dùng thử miễn phí trong ngày (20 lượt/ngày)!**
+                
+                👉 **Cách xử lý cực nhanh:** 
+                1. Mở tab ẩn danh hoặc dùng một **Gmail khác** đăng nhập vào [Google AI Studio](https://aistudio.google.com/).
+                2. Tạo 1 **API Key mới** từ Gmail đó.
+                3. Dán Key mới vào ô bên trên là chạy tiếp được ngay nha!
+                """)
+                return None
+
+            # 2. BẮT LỖI NHẬP SAI KEY (400 / INVALID_ARGUMENT)
+            elif "400" in err_msg or "invalid" in err_msg or "api_key_invalid" in err_msg:
+                st.error("""
+                ❌ **API Key bạn nhập bị sai hoặc không hợp lệ rồi!**
+                
+                👉 **Hãy kiểm tra lại:**
+                - Bạn có dán thừa dấu cách/khoảng trắng ở đầu hay cuối Key không?
+                - Key phải bắt đầu bằng chữ `AIzaSy...`. Hãy thử lấy lại Key mới trên [Google AI Studio](https://aistudio.google.com/) xem sao nhé!
+                """)
+                return None
+
+            # 3. LỖI NGHẼN MẠNG THỜI ĐIỂM (503) -> THỬ LẠI
+            elif any(k in err_msg for k in ["503", "unavailable", "overloaded"]):
                 if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 3
                     if status_container:
-                        status_container.write(f"⏳ Server đang bận chút, tự thử lại sau ({wait_time}s)...")
+                        status_container.write(f"⏳ Server bận chút, đang thử lại lần {attempt + 1}... ({wait_time}s)")
                     time.sleep(wait_time)
                     continue
-            st.error(f"❌ Lỗi API từ Gemini: {str(e)}")
-            raise e
+            
+            # Lỗi khác
+            st.error(f"❌ Có lỗi xảy ra: {str(e)}")
+            return None
+            
     return None
 
 def render_mindmap_svg(mermaid_code):
