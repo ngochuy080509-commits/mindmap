@@ -21,6 +21,13 @@ st.markdown("""
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
         color: white; border: none; box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
     }
+    .guide-box {
+        background-color: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
     .warning-box { background-color: #fffbebf8; border: 1px solid #fde68a; padding: 18px; border-radius: 12px; margin-top: 15px; }
 </style>
 """, unsafe_allow_html=True)
@@ -222,6 +229,18 @@ with tab1:
 
 # --- TAB 2: AUDIO ---
 with tab2:
+    st.markdown("""
+    <div class="guide-box">
+        <h4>⚡ Mẹo tải file siêu nhanh & Không bị nghẽn:</h4>
+        <p>Nếu file âm thanh của bạn nặng trên 30MB (như các file MP3 dài hơn 1 tiếng), hãy nén dung lượng file cực nhanh trong 5 giây:</p>
+        <ol>
+            <li>Truy cập trang web nén miễn phí: <a href="https://online-audio-converter.com/vi/" target="_blank"><b>online-audio-converter.com</b></a></li>
+            <li>Tải file MP3 lên &rarr; Chọn mức chất lượng <b>Tiết kiệm (Economy 64kbit)</b> &rarr; Bấm <b>Chuyển đổi</b>.</li>
+            <li>File sẽ được thu gọn <b>từ 120MB xuống chỉ còn ~8MB</b> giúp tải lên app chỉ mất vài giây!</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
+
     uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
 
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
