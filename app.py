@@ -4,19 +4,31 @@ import os
 import time
 import subprocess
 import json
+import random
 from google import genai
 import streamlit.components.v1 as components
 
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
 
-# CSS GIAO DIỆN
+# TÊN MODEL CHUẨN CỦA GOOGLE
+MODEL_NAME = "gemini-3.6-flash"
+
+# CSS GIAO DIỆN & ẨN NÚT HỆ THỐNG (MANAGE APP)
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
     html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
     .main { background: #f8fafc; }
     
+    /* Ẩn giao diện quản trị của Streamlit */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stApp > header {display: none;}
+    div[data-testid="stStatusWidget"] {visibility: hidden;}
+    [data-testid="manage-app-button"] {display: none !important;}
+
     .stButton>button { 
         width: 100%; border-radius: 12px; height: 3.2em; font-weight: 700;
         background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
@@ -35,36 +47,61 @@ st.markdown("""
 st.title("🧠 AI Bài Giảng - Mindmap Trực Quan")
 st.caption("Biến mọi video bài giảng YouTube hoặc Audio MP3 thành Sơ đồ tư duy sinh động!")
 
-api_key = st.secrets.get("GEMINI_API_KEY", None)
+# XỬ LÝ DANH SÁCH API KEY (SOLUTION 2: XOAY VÒNG KEY)
+raw_keys = st.secrets.get("GEMINI_KEYS", [])
+if isinstance(raw_keys, str):
+    available_keys = [raw_keys]
+else:
+    available_keys = list(raw_keys)
+
+single_key = st.secrets.get("GEMINI_API_KEY", None)
+if single_key and single_key not in available_keys:
+    available_keys.append(single_key)
 
 with st.sidebar:
-    st.header("⚙️ Cấu hình")
-    if not api_key:
-        api_key = st.text_input("🔑 Nhập Gemini API Key:", type="password")
+    st.header("⚙️ Cấu hình API")
+    user_key = st.text_input("🔑 Nhập Key cá nhân (nếu có):", type="password")
+    
+    if user_key:
+        active_keys_pool = [user_key]
+        st.success("✅ Đang sử dụng Key cá nhân của bạn!")
+    elif available_keys:
+        active_keys_pool = available_keys
+        st.success(f"🟢 Hệ thống sẵn sàng ({len(available_keys)} Key dự phòng).")
     else:
-        st.success("✅ Đã kết nối API thành công!")
+        active_keys_pool = []
+        st.warning("⚠️ Chưa tìm thấy API Key nào trong Secrets!")
 
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube", "🎙️ Tải File Âm Thanh"])
 
-# TÊN MODEL ĐÃ ĐƯỢC CHUẨN HÓA VỀ BẢN CHÍNH THỨC
-MODEL_NAME = "gemini-3.6-flash"
+# HÀM GỌI API THÔNG MINH - TỰ ĐỔI KEY KHI BỊ CẠN QUOTA (LỖI 429)
+def generate_content_with_retry(contents, keys_pool, max_retries=8, status_container=None):
+    if not keys_pool:
+        st.error("❌ Không tìm thấy API Key khả dụng. Vui lòng kiểm tra lại cấu hình!")
+        return None
 
-
-def generate_content_with_retry(client, contents, max_retries=10, status_container=None):
+    keys_to_try = list(keys_pool)
+    random.shuffle(keys_to_try)
+    
     for attempt in range(max_retries):
+        current_key = keys_to_try[attempt % len(keys_to_try)]
+        client = genai.Client(api_key=current_key)
+        
         try:
             return client.models.generate_content(model=MODEL_NAME, contents=contents)
         except Exception as e:
             err_msg = str(e).lower()
-            if "503" in err_msg or "unavailable" in err_msg or "high demand" in err_msg or "overloaded" in err_msg:
-                if attempt < max_retries - 1:
-                    wait_time = (attempt + 1) * 4
-                    if status_container:
-                        status_container.write(f"⏳ Đang xếp hàng xử lý, chờ chút nha ({attempt + 1}/{max_retries})...")
-                    time.sleep(wait_time)
-                    continue
-            st.error(f"❌ Lỗi API từ Gemini: {str(e)}")
-            raise e
+            if any(k in err_msg for k in ["429", "resource_exhausted", "quota", "503", "unavailable", "overloaded"]):
+                if status_container:
+                    status_container.write(f"🔄 Key hiện tại cạn lượt, đang chuyển sang Key dự phòng khác (Lần thử {attempt + 1}/{max_retries})...")
+                time.sleep(2)
+                continue
+            else:
+                st.error(f"❌ Lỗi API từ Gemini: {str(e)}")
+                raise e
+
+    st.error("❌ Tất cả API Key đều đang tạm thời hết lượt (Quota Exceeded). Vui lòng thử lại sau vài phút hoặc nhập Key cá nhân!")
+    return None
 
 def render_mindmap_svg(mermaid_code):
     clean_code = re.sub(r'```mermaid\s*', '', mermaid_code)
@@ -242,59 +279,61 @@ with tab1:
     youtube_url = st.text_input("👇 Dán link YouTube bài giảng vào đây:", placeholder="https://www.youtube.com/watch?v=...")
 
     if st.button("🚀 Tạo Mindmap từ Link YouTube", type="primary"):
-        if not api_key:
-            st.error("❌ Vui lòng nhập Gemini API Key!")
+        if not active_keys_pool:
+            st.error("❌ Vui lòng cấu hình API Key!")
         elif not youtube_url:
             st.warning("⚠️ Vui lòng dán link YouTube!")
         else:
-            client = genai.Client(api_key=api_key)
             status = st.status("⏳ Chờ một chút nhé, AI đang tải nội dung video...", expanded=True)
-            
             result_data, result_type = get_yt_audio_or_sub(youtube_url)
             
             if result_type == "sub":
                 status.write("📝 Đã lấy xong dữ liệu, đang phân tích bài giảng...")
                 prompt = f"Phân tích và tóm tắt đầy đủ, chi tiết từng phần bài giảng sau bằng tiếng Việt:\n\"{result_data[:40000]}\""
-                res = generate_content_with_retry(client, prompt, status_container=status)
-                combined = res.text
+                res = generate_content_with_retry(prompt, active_keys_pool, status_container=status)
+                
+                if res and res.text:
+                    combined = res.text
+                    status.write("🎨 Đang thiết kế sơ đồ tư duy phân cấp chi tiết...")
+                    prompt_map = f"Từ tóm tắt bài giảng sau:\n{combined}\n\n{PROMPT_MAP}"
+                    res_map = generate_content_with_retry(prompt_map, active_keys_pool, status_container=status)
 
-                status.write("🎨 Đang thiết kế sơ đồ tư duy phân cấp chi tiết...")
-                prompt_map = f"Từ tóm tắt bài giảng sau:\n{combined}\n\n{PROMPT_MAP}"
-                res_map = generate_content_with_retry(client, prompt_map, status_container=status)
+                    if res_map and res_map.text:
+                        status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
+                        st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
+                        render_mindmap_svg(res_map.text)
 
-                status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
-
-                st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                render_mindmap_svg(res_map.text)
-
-                with st.expander("📄 Xem bản tóm tắt chi tiết"):
-                    st.write(combined)
+                        with st.expander("📄 Xem bản tóm tắt chi tiết"):
+                            st.write(combined)
 
             elif result_type == "audio":
                 try:
                     status.write("🎙️ Đang phân tích âm thanh video...")
-                    gemini_file = client.files.upload(file=result_data)
+                    # Dùng ngẫu nhiên 1 client key để upload file
+                    init_client = genai.Client(api_key=random.choice(active_keys_pool))
+                    gemini_file = init_client.files.upload(file=result_data)
                     
                     while gemini_file.state.name == "PROCESSING":
                         time.sleep(3)
-                        gemini_file = client.files.get(name=gemini_file.name)
+                        gemini_file = init_client.files.get(name=gemini_file.name)
                         
                     status.write("🧠 AI đang tổng hợp toàn bộ ý chính...")
                     prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại chi tiết đầy đủ các phần bằng tiếng Việt."
-                    res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio], status_container=status)
-                    combined = res_audio.text
+                    res_audio = generate_content_with_retry([gemini_file, prompt_audio], active_keys_pool, status_container=status)
                     
-                    status.write("🎨 Đang thiết kế sơ đồ tư duy phân cấp chi tiết...")
-                    prompt_map = f"Từ tóm tắt bài giảng sau:\n{combined}\n\n{PROMPT_MAP}"
-                    res_map = generate_content_with_retry(client, prompt_map, status_container=status)
+                    if res_audio and res_audio.text:
+                        combined = res_audio.text
+                        status.write("🎨 Đang thiết kế sơ đồ tư duy phân cấp chi tiết...")
+                        prompt_map = f"Từ tóm tắt bài giảng sau:\n{combined}\n\n{PROMPT_MAP}"
+                        res_map = generate_content_with_retry(prompt_map, active_keys_pool, status_container=status)
 
-                    status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
+                        if res_map and res_map.text:
+                            status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
+                            st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
+                            render_mindmap_svg(res_map.text)
 
-                    st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                    render_mindmap_svg(res_map.text)
-
-                    with st.expander("📄 Xem bản tóm tắt chi tiết"):
-                        st.write(combined)
+                            with st.expander("📄 Xem bản tóm tắt chi tiết"):
+                                st.write(combined)
                 finally:
                     if os.path.exists(result_data):
                         os.remove(result_data)
@@ -314,14 +353,12 @@ with tab2:
     uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng (MP3, M4A, WAV):", type=["mp3", "m4a", "wav", "mp4"])
 
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
-        if not api_key:
-            st.error("❌ Vui lòng nhập Gemini API Key!")
+        if not active_keys_pool:
+            st.error("❌ Vui lòng cấu hình API Key!")
         elif not uploaded_file:
             st.warning("⚠️ Vui lòng tải file âm thanh lên trước!")
         else:
-            client = genai.Client(api_key=api_key)
             status = st.status("⏳ Đang tải file lên, chờ một chút nhé...", expanded=True)
-            
             file_ext = os.path.splitext(uploaded_file.name)[1]
             temp_path = f"temp_input{file_ext}"
             
@@ -329,33 +366,34 @@ with tab2:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                gemini_file = client.files.upload(file=temp_path)
+                init_client = genai.Client(api_key=random.choice(active_keys_pool))
+                gemini_file = init_client.files.upload(file=temp_path)
                 status.write("✅ Đã nhận file, đang xử lý...")
                 
                 while gemini_file.state.name == "PROCESSING":
                     time.sleep(3)
-                    gemini_file = client.files.get(name=gemini_file.name)
+                    gemini_file = init_client.files.get(name=gemini_file.name)
                     
                 if gemini_file.state.name == "FAILED":
                     raise Exception("Không thể xử lý file âm thanh này.")
 
                 status.write("🎧 AI đang lắng nghe và tóm tắt bài giảng...")
                 prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại chi tiết đầy đủ các phần bằng tiếng Việt."
+                res_audio = generate_content_with_retry([gemini_file, prompt_audio], active_keys_pool, status_container=status)
                 
-                res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio], status_container=status)
-                combined = res_audio.text
-                
-                status.write("🎨 Đang thiết kế sơ đồ tư duy phân cấp chi tiết...")
-                prompt_map = f"Từ tóm tắt bài giảng sau:\n{combined}\n\n{PROMPT_MAP}"
-                res_map = generate_content_with_retry(client, prompt_map, status_container=status)
+                if res_audio and res_audio.text:
+                    combined = res_audio.text
+                    status.write("🎨 Đang thiết kế sơ đồ tư duy phân cấp chi tiết...")
+                    prompt_map = f"Từ tóm tắt bài giảng sau:\n{combined}\n\n{PROMPT_MAP}"
+                    res_map = generate_content_with_retry(prompt_map, active_keys_pool, status_container=status)
 
-                status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
+                    if res_map and res_map.text:
+                        status.update(label="✅ Hoàn tất! Xem sơ đồ bên dưới nhé.", state="complete", expanded=False)
+                        st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
+                        render_mindmap_svg(res_map.text)
 
-                st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                render_mindmap_svg(res_map.text)
-
-                with st.expander("📄 Xem bản tóm tắt chi tiết"):
-                    st.write(combined)
+                        with st.expander("📄 Xem bản tóm tắt chi tiết"):
+                            st.write(combined)
             except Exception as e:
                 status.update(label="❌ Có lỗi xảy ra!", state="error")
                 st.error(f"Lỗi: {str(e)}")
