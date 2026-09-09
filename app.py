@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
 
-# CSS Thiết kế giao diện hiện đại
+# CSS Giao diện
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
@@ -27,11 +27,6 @@ st.markdown("""
         color: white;
         border: none;
         box-shadow: 0 4px 14px rgba(124, 58, 237, 0.3);
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
     }
     .guide-box {
         background-color: #f0fdf4;
@@ -46,15 +41,14 @@ st.markdown("""
 st.title("🧠 AI Bài Giảng - Mindmap Trực Quan & Đẹp Mắt")
 st.caption("Biến mọi video bài giảng / Audio MP3 thành Sơ đồ tư duy sinh động!")
 
-# Lấy API Key từ Secrets hoặc Sidebar
 api_key = st.secrets.get("GEMINI_API_KEY", None)
 
 with st.sidebar:
     st.header("⚙️ Cấu hình")
     if not api_key:
-        api_key = st.text_input("🔑 Nhập Gemini API Key:", type="password", help="Nhập Key cá nhân để sử dụng app")
+        api_key = st.text_input("🔑 Nhập Gemini API Key:", type="password")
     else:
-        st.success("✅ Hệ thống đã sẵn sàng (Đã kết nối API Key)")
+        st.success("✅ Hệ thống đã sẵn sàng")
         
     chunk_time = st.slider("Độ dài chia đoạn phụ đề (phút):", min_value=10, max_value=30, value=15)
 
@@ -64,110 +58,110 @@ def extract_video_id(url):
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     return match.group(1) if match else None
 
-def render_markmap(markdown_content):
-    clean_md = markdown_content.replace("```markdown", "").replace("```", "").strip()
+def render_mindmap_svg(mermaid_code):
+    # Render Mermaid chuẩn không bao giờ trắng màn hình + Có nút tải ảnh
+    clean_code = re.sub(r'```mermaid\s*', '', mermaid_code)
+    clean_code = re.sub(r'```\s*$', '', clean_code).strip()
+    
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
+      <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
       <style>
-        #mindmap-container {{
+        #wrapper {{
+          position: relative;
           width: 100%;
-          height: 680px;
+          height: 650px;
           background: #ffffff;
           border-radius: 16px;
           border: 1px solid #e2e8f0;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-          position: relative;
           overflow: hidden;
         }}
-        #markmap {{
+        #container {{
           width: 100%;
           height: 100%;
         }}
         .dl-btn {{
           position: absolute;
-          top: 15px;
-          right: 15px;
-          z-index: 10;
+          top: 12px;
+          right: 12px;
+          z-index: 99;
           background: #4f46e5;
           color: white;
           border: none;
-          padding: 8px 16px;
+          padding: 8px 14px;
           border-radius: 8px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-weight: 600;
-          font-size: 13px;
+          font-weight: bold;
+          font-size: 12px;
           cursor: pointer;
           box-shadow: 0 4px 10px rgba(0,0,0,0.15);
-          transition: all 0.2s ease;
-        }}
-        .dl-btn:hover {{
-          background: #4338ca;
-          transform: scale(1.03);
         }}
       </style>
-      <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-      <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.3/dist/browser/index.min.js"></script>
-      <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.3/dist/index.min.js"></script>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     </head>
     <body>
-      <div id="mindmap-container">
-        <button class="dl-btn" onclick="downloadPNG()">📸 Tải Sơ Đồ Về Máy / Album</button>
-        <svg id="markmap"></svg>
+      <div id="wrapper">
+        <button class="dl-btn" onclick="downloadSVG()">📸 Tải Ảnh Sơ Đồ</button>
+        <div id="container">
+          <pre class="mermaid">
+          {clean_code}
+          </pre>
+        </div>
       </div>
-      <script>
-        const markdown = {repr(clean_md)};
-        const {{ Transformer }} = window.markmap;
-        const {{ Markmap, loadCSS, loadJS }} = window.markmap;
-        const transformer = new Transformer();
-        const {{ root, features }} = transformer.transform(markdown);
-        const {{ styles, scripts }} = transformer.getUsedAssets(features);
-        if (styles) loadCSS(styles);
-        if (scripts) loadJS(scripts, {{ getMarkmap: () => window.markmap }});
-        
-        Markmap.create('#markmap', {{
-          duration: 300,
-          color: (node) => {{
-            const colors = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
-            return colors[node.state.depth % colors.length];
-          }}
-        }}, root);
 
-        function downloadPNG() {{
-          const container = document.getElementById('mindmap-container');
-          const btn = document.querySelector('.dl-btn');
-          btn.style.display = 'none';
-          
-          html2canvas(container, {{ backgroundColor: '#ffffff', scale: 2 }}).then(canvas => {{
-            const link = document.createElement('a');
-            link.download = 'mindmap-bai-giang.png';
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-            btn.style.display = 'block';
-          }}).catch(() => {{
-            btn.style.display = 'block';
-          }});
+      <script>
+        mermaid.initialize({{ 
+          startOnLoad: true, 
+          theme: 'forest',
+          flowchart: {{ useMaxWidth: false, htmlLabels: true, curve: 'basis' }}
+        }});
+
+        setTimeout(function() {{
+          var svg = document.querySelector("#container svg");
+          if(svg) {{
+            svg.style.width = '100%';
+            svg.style.height = '100%';
+            svgPanZoom(svg, {{
+              zoomEnabled: true,
+              controlIconsEnabled: true,
+              fit: true,
+              center: true
+            }});
+          }}
+        }}, 800);
+
+        function downloadSVG() {{
+          var svg = document.querySelector("#container svg");
+          if(!svg) return;
+          var serializer = new XMLSerializer();
+          var source = serializer.serializeToString(svg);
+          var svgBlob = new Blob([source], {{type: "image/svg+xml;charset=utf-8"}});
+          var svgUrl = URL.createObjectURL(svgBlob);
+          var downloadLink = document.createElement("a");
+          downloadLink.href = svgUrl;
+          downloadLink.download = "mindmap-bai-giang.svg";
+          document.body.appendChild(downloadLink);
+          downloadLink.click();
+          document.body.removeChild(downloadLink);
         }}
       </script>
     </body>
     </html>
     """
-    components.html(html_code, height=710, scrolling=False)
+    components.html(html_code, height=670, scrolling=False)
 
-# PROMPT MARKDOWN ĐỂ TẠO MINDMAP SIÊU ĐẸP
-PROMPT_MARKDOWN = """
-Từ nội dung tóm tắt trên, hãy tạo một sơ đồ tư duy dạng Markdown chuẩn để vẽ Mindmap.
+# PROMPT VẼ SƠ ĐỒ CÂY AN TOÀN CHỐNG LỖI 100%
+PROMPT_MAP = """
+Từ nội dung tóm tắt trên, hãy tạo mã Mermaid flowchart dạng sơ đồ cây từ trái sang phải (`graph LR`).
 
-YÊU CẦU:
-1. BẮT BUỘC dùng cấu trúc danh sách tiêu chuẩn (`#`, `##`, `###`, `-`).
-2. Tiêu đề chính bài giảng nằm ở `# Tiêu đề`.
-3. Các chương/mục lớn nằm ở `## Mục lớn`.
-4. Các ý chi tiết nằm ở `- Ý chi tiết`.
-5. Giữ nguyên tiếng Việt chuẩn có dấu.
-6. Chỉ trả về mã Markdown, không kèm bất kỳ giải thích nào khác.
+YÊU CẦU BẮT BUỘC:
+1. Bắt đầu bằng dòng: `graph LR`
+2. Giữ nguyên tiếng Việt có dấu.
+3. Cú pháp tạo nút an toàn: D["1. Khái Niệm"] --> D1["Nội dung ý 1"]
+4. TUYỆT ĐỐI KHÔNG dùng dấu ngoặc tròn (), ngoặc nhọn {}, ngoặc vuông [] bên trong đoạn chữ tiếng Việt (ngoại trừ ngoặc của ID nút).
+5. Chỉ trả về mã Mermaid trong khối ```mermaid ... ```.
 """
 
 # --- TAB 1: YOUTUBE ---
@@ -241,14 +235,14 @@ with tab1:
 
                     combined = "\n\n".join(summaries)
 
-                    status.write("🎨 Đang vẽ Mindmap siêu đẹp...")
-                    prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MARKDOWN}"
+                    status.write("🎨 Đang vẽ sơ đồ tư duy...")
+                    prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
                     res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
 
                     status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
                     st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                    render_markmap(res_map.text)
+                    render_mindmap_svg(res_map.text)
 
                     with st.expander("📄 Xem bản tóm tắt chi tiết"):
                         st.write(combined)
@@ -293,14 +287,14 @@ with tab2:
                 res_audio = client.models.generate_content(model="gemini-3.6-flash", contents=[gemini_file, prompt_audio])
                 combined = res_audio.text
                 
-                status.write("🎨 Đang vẽ Mindmap siêu đẹp...")
-                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MARKDOWN}"
+                status.write("🎨 Đang vẽ sơ đồ tư duy...")
+                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
                 res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
 
                 status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
                 st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                render_markmap(res_map.text)
+                render_mindmap_svg(res_map.text)
 
                 with st.expander("📄 Xem bản tóm tắt chi tiết"):
                     st.write(combined)
