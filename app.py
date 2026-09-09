@@ -43,14 +43,6 @@ st.markdown("""
         border-radius: 12px;
         margin-top: 15px;
     }
-    .tip-box {
-        background-color: #eff6ff;
-        border: 1px solid #bfdbfe;
-        padding: 12px 18px;
-        border-radius: 10px;
-        margin-bottom: 15px;
-        font-size: 14px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,30 +62,22 @@ with st.sidebar:
 
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (Không phụ đề)"])
 
+MODEL_NAME = "gemini-2.5-flash"
+
+def generate_content_with_retry(client, model, contents, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            return client.models.generate_content(model=model, contents=contents)
+        except Exception as e:
+            if "503" in str(e) or "UNAVAILABLE" in str(e):
+                if attempt < max_retries - 1:
+                    time.sleep(3 * (attempt + 1))
+                    continue
+            raise e
+
 def extract_video_id(url):
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     return match.group(1) if match else None
-
-def generate_content_with_retry(client, contents, prompt_text=None, max_retries=3):
-    """Hàm gọi AI Gemini có cơ chế thử lại (Retry) khi quá tải 503"""
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
-    
-    for model_name in models_to_try:
-        for attempt in range(max_retries):
-            try:
-                if prompt_text:
-                    response = client.models.generate_content(model=model_name, contents=[contents, prompt_text])
-                else:
-                    response = client.models.generate_content(model=model_name, contents=contents)
-                return response
-            except Exception as e:
-                err_msg = str(e)
-                if "503" in err_msg or "UNAVAILABLE" in err_msg or "high demand" in err_msg:
-                    if attempt < max_retries - 1:
-                        time.sleep(3 * (attempt + 1))  # Chờ 3s, 6s... trước khi thử lại
-                        continue
-                if model_name == models_to_try[-1] and attempt == max_retries - 1:
-                    raise e
 
 def render_mindmap_svg(mermaid_code):
     clean_code = re.sub(r'```mermaid\s*', '', mermaid_code)
@@ -291,14 +275,14 @@ with tab1:
                     summaries = []
                     for i, (time_lbl, text) in enumerate(chunks):
                         prompt = f"Tóm tắt ý chính bài giảng đoạn {time_lbl} bằng tiếng Việt chuẩn:\n\"{text}\"\nGiữ mốc thời gian {time_lbl} ở đầu các ý."
-                        res = generate_content_with_retry(client, prompt)
+                        res = generate_content_with_retry(client, MODEL_NAME, prompt)
                         summaries.append(res.text)
 
                     combined = "\n\n".join(summaries)
 
                     status.write("🎨 Đang vẽ sơ đồ tư duy...")
                     prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
-                    res_map = generate_content_with_retry(client, prompt_map)
+                    res_map = generate_content_with_retry(client, MODEL_NAME, prompt_map)
 
                     status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
@@ -314,8 +298,8 @@ with tab1:
                         <h4>💡 Video này không hỗ trợ phụ đề trực tiếp!</h4>
                         <p>Đừng lo, bạn vẫn có thể tạo Mindmap bình thường bằng cách thực hiện 2 bước đơn giản sau:</p>
                         <ol>
-                            <li>Truy cập <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a> để chuyển link YouTube này thành file MP3.</li>
-                            <li>Chuyển sang <b>Tab "🎙️ Tải File Âm Thanh"</b> ở bên cạnh và kéo thả file MP3 vừa tải vào để AI xử lý nhé!</li>
+                            <li>Truy cập <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a> để chuyển link YouTube này thành file MP3 (chỉ mất khoảng 5 giây).</li>
+                            <li>Chuyển sang <b>Tab "🎙️ Tải File Âm Thanh"</b> ở bên cạnh và kéo thả file MP3 vừa tải vào để AI lắng nghe & vẽ sơ đồ tư duy nhé!</li>
                         </ol>
                     </div>
                     """, unsafe_allow_html=True)
@@ -324,17 +308,13 @@ with tab1:
 with tab2:
     st.markdown("""
     <div class="guide-box">
-        <h4>💡 Hướng dẫn tải MP3 từ YouTube:</h4>
+        <h4>💡 Hướng dẫn tải MP3 cực nhanh (Chỉ mất 5 giây):</h4>
         <ol>
-            <li>Mở YouTube và <b>Copy link video</b> bài giảng.</li>
-            <li>Truy cập web: <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a> để chuyển link thành file MP3.</li>
-            <li>Kéo thả file MP3 vào khung bên dưới để AI tự động tạo Mindmap!</li>
+            <li>Mở YouTube và <b>Copy link video</b> bài giảng bạn muốn tóm tắt.</li>
+            <li>Truy cập trang web: <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a>.</li>
+            <li>Dán link YouTube vào ô tìm kiếm &rarr; Chọn định dạng <b>MP3</b> &rarr; Bấm <b>Convert / Download</b>.</li>
+            <li>Kéo thả file MP3 vừa tải vào khung bên dưới để AI tự động tạo Mindmap!</li>
         </ol>
-    </div>
-    
-    <div class="tip-box">
-        ⚡ <b>MẸO TẢI LÊN NHANH GẤP 10 LẦN:</b><br>
-        Nếu file audio nặng trên 30MB (như file ~120MB của bạn), hãy dùng <a href="https://vocalremover.org/compress-audio" target="_blank"><b>VocalRemover Audio Compressor</b></a> hoặc <a href="https://www.freeconvert.com/audio-compressor" target="_blank"><b>FreeConvert</b></a> giảm Bitrate xuống <b>64kbps MP3</b>. Dung lượng sẽ giảm từ 120MB xuống chỉ còn ~10MB giúp tải lên trong vài giây!
     </div>
     """, unsafe_allow_html=True)
 
@@ -356,24 +336,16 @@ with tab2:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                status.write("🧠 Gemini đang lắng nghe bài giảng (Đang xử lý)...")
+                status.write("🧠 Gemini đang lắng nghe bài giảng...")
                 gemini_file = client.files.upload(file=temp_path)
                 
-                # Đợi file sẵn sàng ở trạng thái ACTIVE trên Gemini
-                while gemini_file.state.name == "PROCESSING":
-                    time.sleep(2)
-                    gemini_file = client.files.get(name=gemini_file.name)
-                
-                if gemini_file.state.name == "FAILED":
-                    raise Exception("Lỗi khi xử lý file audio trên server Google Gemini.")
-
                 prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt có mốc thời gian."
-                res_audio = generate_content_with_retry(client, gemini_file, prompt_audio)
+                res_audio = generate_content_with_retry(client, MODEL_NAME, [gemini_file, prompt_audio])
                 combined = res_audio.text
                 
                 status.write("🎨 Đang vẽ sơ đồ tư duy...")
                 prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
-                res_map = generate_content_with_retry(client, prompt_map)
+                res_map = generate_content_with_retry(client, MODEL_NAME, prompt_map)
 
                 status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
