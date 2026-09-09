@@ -9,7 +9,7 @@ import streamlit.components.v1 as components
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
 
-# CSS Thiết kế giao diện xịn xò, hiện đại
+# CSS Thiết kế giao diện hiện đại
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
@@ -33,12 +33,18 @@ st.markdown("""
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(124, 58, 237, 0.4);
     }
-    div[data-testid="stStatusWidget"] { border-radius: 12px; }
+    .guide-box {
+        background-color: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        padding: 15px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🧠 AI Bài Giảng - Mindmap Trực Quan & Đẹp Mắt")
-st.caption("Biến mọi video bài giảng / Audio MP3 thành Sơ đồ tư duy sinh động, chuẩn tiếng Việt!")
+st.caption("Biến mọi video bài giảng / Audio MP3 thành Sơ đồ tư duy sinh động!")
 
 # Lấy API Key từ Secrets hoặc Sidebar
 api_key = st.secrets.get("GEMINI_API_KEY", None)
@@ -48,11 +54,9 @@ with st.sidebar:
     if not api_key:
         api_key = st.text_input("🔑 Nhập Gemini API Key:", type="password", help="Nhập Key cá nhân để sử dụng app")
     else:
-        st.success("✅ Hệ thống đã sẵn sàng (Đã cấu hình API Key sẵn)")
+        st.success("✅ Hệ thống đã sẵn sàng (Đã kết nối API Key)")
         
     chunk_time = st.slider("Độ dài chia đoạn phụ đề (phút):", min_value=10, max_value=30, value=15)
-    st.markdown("---")
-    st.info("💡 **Mẹo:** Dùng chuột hoặc 2 ngón tay để kéo, phóng to / thu nhỏ Mindmap!")
 
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (Không phụ đề)"])
 
@@ -60,107 +64,110 @@ def extract_video_id(url):
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11})", url)
     return match.group(1) if match else None
 
-def render_mindmap_hd(mermaid_code):
-    # Dựng HTML hiển thị Mermaid giao diện mượt, font chuẩn tiếng Việt, có màu sắc hài hòa
+def render_markmap(markdown_content):
+    clean_md = markdown_content.replace("```markdown", "").replace("```", "").strip()
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
-      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
-      <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-      <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
       <style>
-        #container {{
+        #mindmap-container {{
           width: 100%;
           height: 680px;
           background: #ffffff;
           border-radius: 16px;
           border: 1px solid #e2e8f0;
           box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
-          overflow: hidden;
           position: relative;
+          overflow: hidden;
         }}
-        .mermaid {{
+        #markmap {{
           width: 100%;
           height: 100%;
-          font-family: 'Plus Jakarta Sans', sans-serif !important;
         }}
-        .hint {{
+        .dl-btn {{
           position: absolute;
-          bottom: 12px;
+          top: 15px;
           right: 15px;
-          background: rgba(15, 23, 42, 0.75);
-          backdrop-filter: blur(4px);
+          z-index: 10;
+          background: #4f46e5;
           color: white;
-          padding: 6px 14px;
-          border-radius: 20px;
-          font-size: 12px;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 8px;
+          font-family: 'Plus Jakarta Sans', sans-serif;
           font-weight: 600;
-          pointer-events: none;
+          font-size: 13px;
+          cursor: pointer;
+          box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+          transition: all 0.2s ease;
+        }}
+        .dl-btn:hover {{
+          background: #4338ca;
+          transform: scale(1.03);
         }}
       </style>
+      <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+      <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.3/dist/browser/index.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.3/dist/index.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     </head>
     <body>
-      <div id="container">
-        <div class="mermaid">
-        {mermaid_code}
-        </div>
-        <div class="hint">🔍 Kéo & Phóng to / Thu nhỏ</div>
+      <div id="mindmap-container">
+        <button class="dl-btn" onclick="downloadPNG()">📸 Tải Sơ Đồ Về Máy / Album</button>
+        <svg id="markmap"></svg>
       </div>
-
       <script>
-        mermaid.initialize({{ 
-          startOnLoad: true, 
-          theme: 'base',
-          themeVariables: {{
-            fontFamily: 'Plus Jakarta Sans',
-            fontSize: '14px',
-            primaryColor: '#e0e7ff',
-            primaryTextColor: '#1e1b4b',
-            primaryBorderColor: '#6366f1',
-            lineColor: '#6366f1',
-            secondaryColor: '#f0fdf4',
-            tertiaryColor: '#fef2f2'
-          }},
-          flowchart: {{ useMaxWidth: false, htmlLabels: true, curve: 'basis' }}
-        }});
-
-        setTimeout(function() {{
-          var svg = document.querySelector("#container svg");
-          if(svg) {{
-            svg.style.width = '100%';
-            svg.style.height = '100%';
-            svgPanZoom(svg, {{
-              zoomEnabled: true,
-              controlIconsEnabled: true,
-              fit: true,
-              center: true
-            }});
+        const markdown = {repr(clean_md)};
+        const {{ Transformer }} = window.markmap;
+        const {{ Markmap, loadCSS, loadJS }} = window.markmap;
+        const transformer = new Transformer();
+        const {{ root, features }} = transformer.transform(markdown);
+        const {{ styles, scripts }} = transformer.getUsedAssets(features);
+        if (styles) loadCSS(styles);
+        if (scripts) loadJS(scripts, {{ getMarkmap: () => window.markmap }});
+        
+        Markmap.create('#markmap', {{
+          duration: 300,
+          color: (node) => {{
+            const colors = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'];
+            return colors[node.state.depth % colors.length];
           }}
-        }}, 800);
+        }}, root);
+
+        function downloadPNG() {{
+          const container = document.getElementById('mindmap-container');
+          const btn = document.querySelector('.dl-btn');
+          btn.style.display = 'none';
+          
+          html2canvas(container, {{ backgroundColor: '#ffffff', scale: 2 }}).then(canvas => {{
+            const link = document.createElement('a');
+            link.download = 'mindmap-bai-giang.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            btn.style.display = 'block';
+          }}).catch(() => {{
+            btn.style.display = 'block';
+          }});
+        }}
       </script>
     </body>
     </html>
     """
-    components.html(html_code, height=700, scrolling=False)
+    components.html(html_code, height=710, scrolling=False)
 
-# PROMPT GIỮ CHUẨN TIẾNG VIỆT CÓ DẤU & TẠO SƠ ĐỒ ĐẸP
-PROMPT_MAP = """
-Từ nội dung tóm tắt trên, hãy tạo mã Mermaid flowchart dạng sơ đồ cây từ trái sang phải (`graph LR`).
+# PROMPT MARKDOWN ĐỂ TẠO MINDMAP SIÊU ĐẸP
+PROMPT_MARKDOWN = """
+Từ nội dung tóm tắt trên, hãy tạo một sơ đồ tư duy dạng Markdown chuẩn để vẽ Mindmap.
 
-YÊU CẦU QUAN TRỌNG:
-1. BẮT BUỘC GIỮ NGUYÊN TIẾNG VIỆT CÓ DẤU Chuẩn 100% (Ví dụ: "Khái niệm", "Đặc điểm", "Tác dụng").
-2. Bắt đầu mã bằng: `graph LR`
-3. Cú pháp viết nút an toàn bằng dấu ngoặc kép bên trong ngoặc vuông: 
-   Ví dụ: 
-   A["Bài Giảng Enzyme"] --> B["1. Khái Niệm"]
-   B --> B1["Là chất xúc tác sinh học"]
-   A --> C["2. Tính Chất"]
-   C --> C1["Tính đặc hiệu cao"]
-4. TUYỆT ĐỐI KHÔNG dùng dấu ngoặc đơn (), ngoặc nhọn {}, ngoặc vuông [] bên trong đoạn chữ tiếng Việt. Hãy dùng dấu ngoặc kép "" bao bọc đoạn chữ như ví dụ ở bước 3.
-5. Ngôn ngữ ngắn gọn, đúc kết thành các cụm từ súc tích.
-6. Chỉ trả về mã Mermaid nằm trong khối ```mermaid ... ```.
+YÊU CẦU:
+1. BẮT BUỘC dùng cấu trúc danh sách tiêu chuẩn (`#`, `##`, `###`, `-`).
+2. Tiêu đề chính bài giảng nằm ở `# Tiêu đề`.
+3. Các chương/mục lớn nằm ở `## Mục lớn`.
+4. Các ý chi tiết nằm ở `- Ý chi tiết`.
+5. Giữ nguyên tiếng Việt chuẩn có dấu.
+6. Chỉ trả về mã Markdown, không kèm bất kỳ giải thích nào khác.
 """
 
 # --- TAB 1: YOUTUBE ---
@@ -234,16 +241,14 @@ with tab1:
 
                     combined = "\n\n".join(summaries)
 
-                    status.write("🎨 Đang thiết kế sơ đồ tư duy tiếng Việt...")
-                    prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
+                    status.write("🎨 Đang vẽ Mindmap siêu đẹp...")
+                    prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MARKDOWN}"
                     res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
-                    clean_mermaid = re.sub(r'```mermaid\s*', '', res_map.text)
-                    clean_mermaid = re.sub(r'```\s*$', '', clean_mermaid).strip()
 
                     status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
                     st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                    render_mindmap_hd(clean_mermaid)
+                    render_markmap(res_map.text)
 
                     with st.expander("📄 Xem bản tóm tắt chi tiết"):
                         st.write(combined)
@@ -253,6 +258,18 @@ with tab1:
 
 # --- TAB 2: AUDIO ---
 with tab2:
+    st.markdown("""
+    <div class="guide-box">
+        <h4>💡 Hướng dẫn tải MP3 từ YouTube (Chỉ mất 10 giây):</h4>
+        <ol>
+            <li>Mở YouTube và <b>Copy link video</b> bài giảng bạn muốn tóm tắt.</li>
+            <li>Truy cập trang web: <a href="https://y2meta.nu" target="_blank"><b>y2meta.nu</b></a> hoặc <a href="https://y2mate.is" target="_blank"><b>y2mate.is</b></a>.</li>
+            <li>Dán link YouTube vào ô tìm kiếm &rarr; Chọn tab <b>MP3</b> &rarr; Bấm <b>Download</b> về máy.</li>
+            <li>Kéo thả file MP3 vừa tải vào khung bên dưới để tạo Mindmap!</li>
+        </ol>
+    </div>
+    """, unsafe_allow_html=True)
+
     uploaded_file = st.file_uploader("📂 Tải file MP3 / M4A / WAV bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
 
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
@@ -269,23 +286,21 @@ with tab2:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                status.write("🧠 Gemini đang lắng nghe và tóm tắt bài giảng bằng tiếng Việt...")
+                status.write("🧠 Gemini đang lắng nghe bài giảng...")
                 gemini_file = client.files.upload(file=temp_path)
                 
                 prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt có mốc thời gian."
                 res_audio = client.models.generate_content(model="gemini-3.6-flash", contents=[gemini_file, prompt_audio])
                 combined = res_audio.text
                 
-                status.write("🎨 Đang vẽ sơ đồ tư duy chuẩn tiếng Việt...")
-                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MAP}"
+                status.write("🎨 Đang vẽ Mindmap siêu đẹp...")
+                prompt_map = f"Từ tóm tắt sau:\n{combined}\n\n{PROMPT_MARKDOWN}"
                 res_map = client.models.generate_content(model="gemini-3.6-flash", contents=prompt_map)
-                clean_mermaid = re.sub(r'```mermaid\s*', '', res_map.text)
-                clean_mermaid = re.sub(r'```\s*$', '', clean_mermaid).strip()
 
                 status.update(label="✅ Hoàn tất!", state="complete", expanded=False)
 
                 st.subheader("📌 Sơ Đồ Tư Duy Bài Giảng")
-                render_mindmap_hd(clean_mermaid)
+                render_markmap(res_map.text)
 
                 with st.expander("📄 Xem bản tóm tắt chi tiết"):
                     st.write(combined)
