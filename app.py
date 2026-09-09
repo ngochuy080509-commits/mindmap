@@ -6,11 +6,12 @@ import time
 from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 import streamlit.components.v1 as components
+from pydub import AudioSegment
 
 # CẤU HÌNH TRANG STREAMLIT
 st.set_page_config(page_title="AI Mindmap Bài Giảng", page_icon="🧠", layout="wide")
 
-# CSS Giao diện hiện đại
+# CSS Giao diện
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
@@ -62,8 +63,17 @@ with st.sidebar:
 
 tab1, tab2 = st.tabs(["🎥 Qua Link YouTube (Có phụ đề)", "🎙️ Tải File Âm Thanh (Không phụ đề)"])
 
-# Tên model chuẩn của google-genai SDK
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.6-flash"
+
+def compress_audio(input_path, output_path, bitrate="64k"):
+    """Tự động nén file âm thanh về dung lượng siêu nhẹ (bitrate 64k)"""
+    try:
+        audio = AudioSegment.from_file(input_path)
+        audio.export(output_path, format="mp3", bitrate=bitrate)
+        return True
+    except Exception as e:
+        print(f"Lỗi khi nén: {e}")
+        return False
 
 def generate_content_with_retry(client, contents, max_retries=3):
     for attempt in range(max_retries):
@@ -198,7 +208,6 @@ def render_mindmap_svg(mermaid_code):
     """
     components.html(html_code, height=670, scrolling=False)
 
-# PROMPT VẼ SƠ ĐỒ AN TOÀN KHÔNG BỊ LỖI
 PROMPT_MAP = """
 Từ nội dung tóm tắt trên, hãy tạo mã Mermaid flowchart dạng sơ đồ cây từ trái sang phải (`graph LR`).
 
@@ -297,29 +306,15 @@ with tab1:
                     st.markdown("""
                     <div class="warning-box">
                         <h4>💡 Video này không hỗ trợ phụ đề trực tiếp!</h4>
-                        <p>Đừng lo, bạn vẫn có thể tạo Mindmap bình thường bằng cách thực hiện 2 bước đơn giản sau:</p>
-                        <ol>
-                            <li>Truy cập <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a> để chuyển link YouTube này thành file MP3 (chỉ mất khoảng 5 giây).</li>
-                            <li>Chuyển sang <b>Tab "🎙️ Tải File Âm Thanh"</b> ở bên cạnh và kéo thả file MP3 vừa tải vào để AI lắng nghe & vẽ sơ đồ tư duy nhé!</li>
-                        </ol>
+                        <p>Bạn hãy tải file audio ở Tab "Tải File Âm Thanh" bên cạnh để AI tự xử lý nhé.</p>
                     </div>
                     """, unsafe_allow_html=True)
 
 # --- TAB 2: AUDIO ---
 with tab2:
-    st.markdown("""
-    <div class="guide-box">
-        <h4>💡 Hướng dẫn tải MP3 cực nhanh (Chỉ mất 5 giây):</h4>
-        <ol>
-            <li>Mở YouTube và <b>Copy link video</b> bài giảng bạn muốn tóm tắt.</li>
-            <li>Truy cập trang web: <a href="https://ytmp3.nu" target="_blank"><b>ytmp3.nu</b></a>.</li>
-            <li>Dán link YouTube vào ô tìm kiếm &rarr; Chọn định dạng <b>MP3</b> &rarr; Bấm <b>Convert / Download</b>.</li>
-            <li>Kéo thả file MP3 vừa tải vào khung bên dưới để AI tự động tạo Mindmap!</li>
-        </ol>
-    </div>
-    """, unsafe_allow_html=True)
+    st.info("💡 **Hệ thống hỗ trợ tự động nén nhẹ dung lượng file.** Bạn chỉ việc kéo thả file MP3/M4A/WAV bất kỳ vào khung dưới đây!")
 
-    uploaded_file = st.file_uploader("📂 Tải file MP3 / M4A / WAV bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
+    uploaded_file = st.file_uploader("📂 Tải file âm thanh bài giảng lên đây:", type=["mp3", "m4a", "wav", "mp4"])
 
     if st.button("🚀 Phân Tích Audio & Tạo Mindmap", type="primary"):
         if not api_key:
@@ -328,18 +323,27 @@ with tab2:
             st.warning("⚠️ Vui lòng tải file âm thanh lên trước!")
         else:
             client = genai.Client(api_key=api_key)
-            status = st.status("🎙️ Đang tải file lên Gemini...", expanded=True)
+            status = st.status("📥 Đang tiếp nhận file...", expanded=True)
             
             file_ext = os.path.splitext(uploaded_file.name)[1]
-            temp_path = f"temp_input_audio{file_ext}"
+            temp_raw_path = f"temp_raw{file_ext}"
+            temp_compressed_path = "temp_compressed.mp3"
             
-            with open(temp_path, "wb") as f:
+            # Lưu file gốc
+            with open(temp_raw_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
                 
             try:
-                status.write("🧠 Gemini đang lắng nghe bài giảng...")
-                gemini_file = client.files.upload(file=temp_path)
+                # Tự động nén file để gửi lên AI cực nhanh
+                status.write("⚡ Đang tự động nén tối ưu dung lượng file âm thanh...")
+                is_compressed = compress_audio(temp_raw_path, temp_compressed_path)
                 
+                final_upload_path = temp_compressed_path if is_compressed else temp_raw_path
+                
+                status.write("🎙️ Đang tải audio lên Gemini...")
+                gemini_file = client.files.upload(file=final_upload_path)
+                
+                status.write("🧠 Gemini đang lắng nghe & tóm tắt bài giảng...")
                 prompt_audio = "Hãy nghe toàn bộ audio bài giảng này và tóm tắt lại các ý chính chi tiết bằng tiếng Việt có mốc thời gian."
                 res_audio = generate_content_with_retry(client, [gemini_file, prompt_audio])
                 combined = res_audio.text
@@ -359,5 +363,6 @@ with tab2:
                 status.update(label="❌ Lỗi xử lý!", state="error")
                 st.error(f"Đã xảy ra lỗi: {str(e)}")
             finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
+                for p in [temp_raw_path, temp_compressed_path]:
+                    if os.path.exists(p):
+                        os.remove(p)
